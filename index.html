@@ -8,6 +8,67 @@
 </head>
 <body>
     <canvas id="voronoiCanvas"></canvas>
+    
+    <!-- 좌측 컨트롤 패널 -->
+    <div id="controlPanel">
+        <h2>Customize</h2>
+        
+        <!-- Cell 개수 -->
+        <div class="control-group">
+            <label for="cellCount">Cell 개수</label>
+            <div class="slider-container">
+                <input type="range" id="cellCount" min="20" max="120" value="60" step="1">
+                <span class="value-display" id="cellCountValue">60</span>
+            </div>
+        </div>
+        
+        <!-- Cell Color -->
+        <div class="control-group">
+            <label for="cellColorToggle">Cell Color</label>
+            <div class="toggle-container">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="cellColorToggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="color-picker-container" id="colorPickerContainer" style="display: none;">
+                <input type="color" id="cellColorPicker" value="#ffffff">
+            </div>
+        </div>
+        
+        <!-- Stroke Visible -->
+        <div class="control-group">
+            <label for="strokeVisibleToggle">Stroke Visible</label>
+            <div class="toggle-container">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="strokeVisibleToggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="color-picker-container" id="strokeColorPickerContainer" style="display: none;">
+                <input type="color" id="strokeColorPicker" value="#000000">
+            </div>
+        </div>
+        
+        <!-- Dot Size -->
+        <div class="control-group">
+            <label for="dotSize">Dot Size</label>
+            <div class="slider-container">
+                <input type="range" id="dotSize" min="1" max="20" value="6" step="0.5">
+                <span class="value-display" id="dotSizeValue">6</span>
+            </div>
+        </div>
+        
+        <!-- Text Size -->
+        <div class="control-group">
+            <label for="textSize">Text Size</label>
+            <div class="slider-container">
+                <input type="range" id="textSize" min="12" max="72" value="24" step="1">
+                <span class="value-display" id="textSizeValue">24</span>
+            </div>
+        </div>
+    </div>
+    
     <script src="https://cdn.jsdelivr.net/npm/d3-delaunay@6"></script>
     <script src="voronoi.js"></script>
 </body>

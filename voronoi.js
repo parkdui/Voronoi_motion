@@ -41,10 +41,25 @@ class VoronoiPattern {
     }
     
     resize() {
-        this.canvas.width = window.innerWidth;
-        this.canvas.height = window.innerHeight;
-        this.width = this.canvas.width;
-        this.height = this.canvas.height;
+        // 고해상도 렌더링을 위해 devicePixelRatio 사용
+        const dpr = window.devicePixelRatio || 1;
+        const displayWidth = window.innerWidth;
+        const displayHeight = window.innerHeight;
+        
+        // 실제 캔버스 크기 설정 (고해상도)
+        this.canvas.width = displayWidth * dpr;
+        this.canvas.height = displayHeight * dpr;
+        
+        // CSS 크기는 디스플레이 크기로 설정
+        this.canvas.style.width = displayWidth + 'px';
+        this.canvas.style.height = displayHeight + 'px';
+        
+        // 컨텍스트 스케일 조정
+        this.ctx.scale(dpr, dpr);
+        
+        // 논리적 크기 저장
+        this.width = displayWidth;
+        this.height = displayHeight;
         // 리사이즈 시 포인트 위치 조정
         if (this.points.length > 0) {
             for (let i = 0; i < this.points.length; i++) {
@@ -622,6 +637,10 @@ class VoronoiPattern {
     }
     
     draw() {
+        // 고품질 렌더링 설정
+        this.ctx.imageSmoothingEnabled = true;
+        this.ctx.imageSmoothingQuality = 'high';
+        
         // 시간에 따라 크기 noise 오프셋 업데이트 (부드러운 변화를 위해)
         const currentTime = Date.now() / 1000;
         this.sizeNoiseOffset = currentTime * 0.2; // 느린 속도로 변화
@@ -732,7 +751,8 @@ class VoronoiPattern {
             
             // 텍스트 크기 - Perlin noise 기반 크기 사용
             const fontSize = this.baseTextSize * sizeFactor;
-            this.ctx.font = `${fontSize}px sans-serif`;
+            // 고품질 텍스트 렌더링을 위한 폰트 설정
+            this.ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
             
             // 텍스트 위치 및 크기 계산
             const textX = x + dotRadius + 3;

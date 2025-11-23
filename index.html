@@ -67,9 +67,45 @@
                 <span class="value-display" id="textSizeValue">24</span>
             </div>
         </div>
+        
+        <!-- v3 전용 Dot Size -->
+        <div class="control-group" id="v3DotSizeGroup" style="display: none;">
+            <label for="v3DotSize">v3 Dot Size</label>
+            <div class="slider-container">
+                <input type="range" id="v3DotSize" min="1" max="20" value="6" step="0.5">
+                <span class="value-display" id="v3DotSizeValue">6</span>
+            </div>
+        </div>
+        
+        <!-- v3 전용 Text Size -->
+        <div class="control-group" id="v3TextSizeGroup" style="display: none;">
+            <label for="v3TextSize">v3 Text Size</label>
+            <div class="slider-container">
+                <input type="range" id="v3TextSize" min="12" max="72" value="24" step="1">
+                <span class="value-display" id="v3TextSizeValue">24</span>
+            </div>
+        </div>
+        
+        <!-- Version Buttons -->
+        <div class="control-group">
+            <label>Version</label>
+            <div class="version-buttons">
+                <button id="v1Button" class="version-btn">v1</button>
+                <button id="v2Button" class="version-btn">v2</button>
+                <button id="v3Button" class="version-btn">v3</button>
+            </div>
+        </div>
     </div>
     
+    <!-- Tweakpane for v3 - 먼저 로드 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tweakpane@3.1.5/dist/tweakpane.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/tweakpane@3.1.5/dist/tweakpane.min.js"></script>
+    
+    <!-- p5.js for v3 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/d3-delaunay@6"></script>
+    <script src="voronoi-shader.js"></script>
+    <script src="v3Sketch.js"></script>
     <script src="voronoi.js"></script>
 </body>
 </html>

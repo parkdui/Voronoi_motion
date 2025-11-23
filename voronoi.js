@@ -18,6 +18,13 @@ class VoronoiPattern {
         this.baseDotSize = 6;
         this.baseTextSize = 24;
         
+        // 버전 관리
+        this.versions = {
+            v1: null, // v1 설정 저장
+            v2: null  // v2 설정 저장 (나중에 사용)
+        };
+        this.currentVersion = null; // 현재 활성화된 버전
+        
         // 애니메이션 상태 관리
         this.animationState = 'voronoi'; // 'voronoi', 'toGrid', 'gridDeform', 'gridDynamic', 'toVoronoi'
         this.animationTime = 0;
@@ -32,8 +39,16 @@ class VoronoiPattern {
         this.gridDeformEndPoints = []; // gridDeform 종료 시점의 포인트 위치 저장
         this.gridDynamicEndPoints = []; // gridDynamic 종료 시점의 포인트 위치 저장
         
+        // 텍스트 애니메이션 관리 (모드 기반)
+        this.textRevealProgress = 0; // 텍스트가 점진적으로 나타나는 진행도
+        this.currentModeText = 'creative'; // 현재 모드의 텍스트 (초기값: voronoi 모드)
+        this.lastLogTime = null; // 디버깅용
+        
         this.resize();
         window.addEventListener('resize', () => this.resize());
+        
+        // localStorage에서 저장된 버전 로드
+        this.loadVersionsFromStorage();
         
         this.setupControls();
         this.init();
@@ -103,6 +118,9 @@ class VoronoiPattern {
         
         // 애니메이션 시작 시간 설정
         this.stateStartTime = Date.now();
+        // 초기 모드에 맞는 텍스트 설정
+        this.currentModeText = 'creative';
+        this.textRevealProgress = 0;
     }
     
     // 컨트롤 설정
@@ -166,6 +184,455 @@ class VoronoiPattern {
             textSizeValue.textContent = newValue;
             this.baseTextSize = newValue;
         });
+        
+        // v3 전용 Dot Size 슬라이더
+        const v3DotSizeSlider = document.getElementById('v3DotSize');
+        const v3DotSizeValue = document.getElementById('v3DotSizeValue');
+        
+        if (v3DotSizeSlider && v3DotSizeValue) {
+            v3DotSizeSlider.addEventListener('input', (e) => {
+                const newValue = parseFloat(e.target.value);
+                v3DotSizeValue.textContent = newValue.toFixed(1);
+                if (typeof v3PARAMS !== 'undefined' && v3PARAMS) {
+                    v3PARAMS.DotSize = newValue;
+                }
+            });
+        }
+        
+        // v3 전용 Text Size 슬라이더
+        const v3TextSizeSlider = document.getElementById('v3TextSize');
+        const v3TextSizeValue = document.getElementById('v3TextSizeValue');
+        
+        if (v3TextSizeSlider && v3TextSizeValue) {
+            v3TextSizeSlider.addEventListener('input', (e) => {
+                const newValue = parseInt(e.target.value);
+                v3TextSizeValue.textContent = newValue;
+                if (typeof v3PARAMS !== 'undefined' && v3PARAMS) {
+                    v3PARAMS.TextSize = newValue;
+                }
+            });
+        }
+        
+        // Version 버튼 설정
+        this.setupVersionButtons();
+        
+        // 초기 v1 설정 저장 (v1이 없을 때만 현재 기본값으로 저장)
+        if (!this.versions.v1) {
+            this.saveVersion('v1');
+            this.updateActiveButton('v1');
+        }
+    }
+    
+    // localStorage에서 버전 로드
+    loadVersionsFromStorage() {
+        try {
+            const v1Saved = localStorage.getItem('voronoi_v1');
+            if (v1Saved) {
+                this.versions.v1 = JSON.parse(v1Saved);
+            }
+            
+            const v2Saved = localStorage.getItem('voronoi_v2');
+            if (v2Saved) {
+                this.versions.v2 = JSON.parse(v2Saved);
+            }
+        } catch (e) {
+            console.warn('localStorage에서 버전 로드 실패:', e);
+        }
+    }
+    
+    // 버전 버튼 설정
+    setupVersionButtons() {
+        const v1Button = document.getElementById('v1Button');
+        const v2Button = document.getElementById('v2Button');
+        const v3Button = document.getElementById('v3Button');
+        
+        // v1 버튼: 저장된 설정 로드
+        v1Button.addEventListener('click', () => {
+            this.switchToVersion('v1');
+        });
+        
+        // v2 버튼: 저장된 설정 로드 또는 현재 설정을 v2로 저장
+        v2Button.addEventListener('click', () => {
+            this.switchToVersion('v2');
+        });
+        
+        // v3 버튼: p5.js shader 기반 Voronoi
+        if (v3Button) {
+            v3Button.addEventListener('click', () => {
+                this.switchToVersion('v3');
+            });
+        }
+        
+        // 초기 활성 버튼 설정 (v1이 저장되어 있으면 v1 활성화)
+        if (this.versions.v1) {
+            this.updateActiveButton('v1');
+        }
+    }
+    
+    // 버전 전환
+    switchToVersion(version) {
+        if (version === 'v3') {
+            // v3로 전환: p5.js 사용
+            this.switchToV3();
+        } else {
+            // v1 또는 v2로 전환: 기존 canvas 사용
+            this.switchFromV3();
+            
+            if (this.versions[version]) {
+                this.loadVersion(version);
+            } else {
+                // 버전이 없으면 현재 설정을 해당 버전으로 저장 후 로드
+                this.saveVersion(version);
+            }
+            this.updateActiveButton(version);
+        }
+    }
+    
+    // v3로 전환
+    switchToV3() {
+        console.log('Switching to v3...');
+        
+        // 기존 canvas 숨기기
+        if (this.canvas) {
+            this.canvas.style.display = 'none';
+        }
+        
+        // 기존 컨트롤 숨기기 (v3 전용 컨트롤 제외)
+        const controlGroups = document.querySelectorAll('#controlPanel > .control-group');
+        controlGroups.forEach(group => {
+            const isV3Control = group.id === 'v3DotSizeGroup' || group.id === 'v3TextSizeGroup';
+            if (!isV3Control) {
+                group.style.display = 'none';
+            } else {
+                group.style.display = 'block'; // v3 전용 컨트롤은 표시
+            }
+        });
+        
+        // Tweakpane이 아직 생성되지 않았으면 먼저 생성 시도
+        if (typeof setupV3Controls === 'function' && typeof Tweakpane !== 'undefined') {
+            // v3PARAMS가 없으면 기본값으로 초기화
+            if (typeof v3PARAMS === 'undefined' || v3PARAMS === null) {
+                window.v3PARAMS = {
+                    Mode: 'Fill',
+                    FillColor: { r: 1, g: 1, b: 1 }, // rgb(255, 255, 255)
+                    Contour: false,
+                    Edge: true,
+                    EdgeColor: { r: 121/255, g: 76/255, b: 212/255 }, // rgb(121, 76, 212)
+                    Point: true, // point를 활성화하여 위치 추적
+                    PointColor: { r: 0, g: 0, b: 0 },
+                    Speed: 0.027,
+                    Scale: 7.7, // 30% 큰 cell
+                    Smin: 1.0,
+                    DotSize: 6.0,
+                    TextSize: 24,
+                };
+            }
+            setupV3Controls();
+        }
+        
+        // p5.js 초기화 (아직 초기화되지 않았으면)
+        if (!window.v3P5Instance && typeof p5 !== 'undefined' && typeof v3Sketch !== 'undefined') {
+            try {
+                window.v3P5Instance = new p5(v3Sketch);
+                console.log('v3 p5.js instance created');
+            } catch (error) {
+                console.error('Error creating p5.js instance:', error);
+            }
+        } else if (!window.v3P5Instance) {
+            console.error('p5.js or v3Sketch not available');
+        }
+        
+        // 컨트롤 표시 (약간의 지연 후)
+        setTimeout(() => {
+            if (typeof showV3Controls === 'function') {
+                showV3Controls();
+            }
+        }, 200);
+        
+        this.currentVersion = 'v3';
+        this.updateActiveButton('v3');
+    }
+    
+    // v3에서 다른 버전으로 전환
+    switchFromV3() {
+        // p5.js 제거
+        if (window.v3P5Instance) {
+            window.v3P5Instance.remove();
+            window.v3P5Instance = null;
+        }
+        
+        // Tweakpane 제거
+        if (typeof v3Pane !== 'undefined' && v3Pane) {
+            v3Pane.dispose();
+            v3Pane = null;
+        }
+        
+        // 기존 canvas 보이기
+        if (this.canvas) {
+            this.canvas.style.display = 'block';
+        }
+        
+        // 기존 컨트롤 보이기 (v3 전용 컨트롤 숨기기)
+        const controlGroups = document.querySelectorAll('#controlPanel > .control-group');
+        controlGroups.forEach(group => {
+            const isV3Control = group.id === 'v3DotSizeGroup' || group.id === 'v3TextSizeGroup';
+            if (isV3Control) {
+                group.style.display = 'none';
+            } else {
+                group.style.display = 'block';
+            }
+        });
+        
+        // v3 컨트롤 숨기기
+        if (typeof hideV3Controls === 'function') {
+            hideV3Controls();
+        }
+    }
+    
+    // 현재 설정을 버전으로 저장
+    saveVersion(version) {
+        this.versions[version] = {
+            numPoints: this.numPoints,
+            cellColorEnabled: this.cellColorEnabled,
+            cellColor: this.cellColor,
+            strokeVisible: this.strokeVisible,
+            strokeColor: this.strokeColor,
+            baseDotSize: this.baseDotSize,
+            baseTextSize: this.baseTextSize
+        };
+        
+        // localStorage에도 저장 (페이지 새로고침 후에도 유지)
+        try {
+            localStorage.setItem(`voronoi_${version}`, JSON.stringify(this.versions[version]));
+        } catch (e) {
+            console.warn('localStorage 저장 실패:', e);
+        }
+        
+        console.log(`${version} 버전이 저장되었습니다.`, this.versions[version]);
+    }
+    
+    // 버전 설정 로드
+    loadVersion(version) {
+        if (!this.versions[version]) {
+            // localStorage에서 시도
+            try {
+                const saved = localStorage.getItem(`voronoi_${version}`);
+                if (saved) {
+                    this.versions[version] = JSON.parse(saved);
+                } else {
+                    console.warn(`${version} 버전이 없습니다.`);
+                    return;
+                }
+            } catch (e) {
+                console.warn('localStorage 로드 실패:', e);
+                return;
+            }
+        }
+        
+        const config = this.versions[version];
+        
+        // 설정 적용
+        this.numPoints = config.numPoints;
+        this.cellColorEnabled = config.cellColorEnabled;
+        this.cellColor = config.cellColor;
+        this.strokeVisible = config.strokeVisible;
+        this.strokeColor = config.strokeColor;
+        this.baseDotSize = config.baseDotSize;
+        this.baseTextSize = config.baseTextSize;
+        
+        // UI 업데이트
+        this.updateUIFromConfig(config);
+        
+        // 포인트 재초기화 (numPoints가 변경되었을 수 있음)
+        this.init();
+        
+        this.currentVersion = version;
+        console.log(`${version} 버전이 로드되었습니다.`, config);
+    }
+    
+    // UI를 설정값에 맞게 업데이트
+    updateUIFromConfig(config) {
+        // Cell 개수
+        const cellCountSlider = document.getElementById('cellCount');
+        const cellCountValue = document.getElementById('cellCountValue');
+        if (cellCountSlider && cellCountValue) {
+            cellCountSlider.value = config.numPoints;
+            cellCountValue.textContent = config.numPoints;
+        }
+        
+        // Cell Color
+        const cellColorToggle = document.getElementById('cellColorToggle');
+        const colorPickerContainer = document.getElementById('colorPickerContainer');
+        const cellColorPicker = document.getElementById('cellColorPicker');
+        if (cellColorToggle && colorPickerContainer && cellColorPicker) {
+            cellColorToggle.checked = config.cellColorEnabled;
+            colorPickerContainer.style.display = config.cellColorEnabled ? 'block' : 'none';
+            cellColorPicker.value = config.cellColor;
+        }
+        
+        // Stroke Visible
+        const strokeVisibleToggle = document.getElementById('strokeVisibleToggle');
+        const strokeColorPickerContainer = document.getElementById('strokeColorPickerContainer');
+        const strokeColorPicker = document.getElementById('strokeColorPicker');
+        if (strokeVisibleToggle && strokeColorPickerContainer && strokeColorPicker) {
+            strokeVisibleToggle.checked = config.strokeVisible;
+            strokeColorPickerContainer.style.display = config.strokeVisible ? 'block' : 'none';
+            strokeColorPicker.value = config.strokeColor;
+        }
+        
+        // Dot Size
+        const dotSizeSlider = document.getElementById('dotSize');
+        const dotSizeValue = document.getElementById('dotSizeValue');
+        if (dotSizeSlider && dotSizeValue) {
+            dotSizeSlider.value = config.baseDotSize;
+            dotSizeValue.textContent = config.baseDotSize.toFixed(1);
+        }
+        
+        // Text Size
+        const textSizeSlider = document.getElementById('textSize');
+        const textSizeValue = document.getElementById('textSizeValue');
+        if (textSizeSlider && textSizeValue) {
+            textSizeSlider.value = config.baseTextSize;
+            textSizeValue.textContent = config.baseTextSize;
+        }
+    }
+    
+    // 활성 버튼 업데이트
+    updateActiveButton(version) {
+        const v1Button = document.getElementById('v1Button');
+        const v2Button = document.getElementById('v2Button');
+        const v3Button = document.getElementById('v3Button');
+        
+        // 모든 버튼에서 active 클래스 제거
+        if (v1Button) v1Button.classList.remove('active');
+        if (v2Button) v2Button.classList.remove('active');
+        if (v3Button) v3Button.classList.remove('active');
+        
+        // 선택된 버튼에 active 클래스 추가
+        if (version === 'v1' && v1Button) {
+            v1Button.classList.add('active');
+        } else if (version === 'v2' && v2Button) {
+            v2Button.classList.add('active');
+        } else if (version === 'v3' && v3Button) {
+            v3Button.classList.add('active');
+        }
+    }
+    
+    // 텍스트 시퀀스 업데이트 (모드 기반)
+    updateTextSequence() {
+        const currentTime = Date.now();
+        const elapsed = currentTime - this.stateStartTime; // 밀리초 단위
+        
+        // 모드에 따라 텍스트와 duration 설정
+        let modeText = '';
+        let modeDuration = this.stateDuration; // 밀리초 단위
+        
+        switch (this.animationState) {
+            case 'voronoi':
+                modeText = 'creative';
+                modeDuration = this.stateDuration;
+                break;
+            case 'gridDeform':
+                modeText = 'intelligence';
+                modeDuration = this.stateDuration;
+                break;
+            case 'gridDynamic':
+                modeText = 'design';
+                modeDuration = this.gridDynamicDuration;
+                break;
+            default:
+                // 전환 모드에서는 이전 모드의 텍스트 유지
+                modeText = this.currentModeText || 'ccid';
+                modeDuration = this.stateDuration;
+                break;
+        }
+        
+        // 모드가 변경되면 텍스트 초기화
+        if (this.currentModeText !== modeText) {
+            this.currentModeText = modeText;
+            this.textRevealProgress = 0;
+            this.lastLogTime = null; // 로그 시간도 리셋
+        }
+        
+        // 텍스트가 점진적으로 나타나는 진행도 계산
+        // elapsed와 modeDuration 모두 밀리초 단위이므로 정상적으로 계산됨
+        const progress = Math.min(1, Math.max(0, elapsed / modeDuration));
+        
+        // 텍스트가 나타나는 속도를 빠르게 (전체 duration의 50% 동안 완성)
+        // 완성 후에는 1.0으로 유지하여 다음 모드 전환까지 텍스트 유지
+        const textRevealSpeed = 2.0; // 2배 속도로 나타남
+        const textRevealDuration = 0.5; // 전체 duration의 50% 동안 완성
+        const textProgress = Math.min(1, progress / textRevealDuration);
+        this.textRevealProgress = Math.min(1, textProgress * textRevealSpeed);
+        
+        // 디버깅: 진행도가 증가하는지 확인 (매 0.1초마다 로그 출력)
+        if (this.currentModeText && this.currentModeText.length > 1) {
+            const currentText = this.getCurrentText();
+            // 매 0.1초마다 로그 출력 (더 자주 확인)
+            const logInterval = 100; // 밀리초 단위 (0.1초)
+            const currentLogTime = Math.floor(elapsed / logInterval);
+            if (!this.lastLogTime || currentLogTime !== this.lastLogTime) {
+                this.lastLogTime = currentLogTime;
+                const targetLength = this.currentModeText.length;
+                const calculatedLength = Math.ceil(1 + (targetLength - 1) * this.textRevealProgress);
+                console.log('Text reveal:', {
+                    mode: this.animationState,
+                    modeText: this.currentModeText,
+                    progress: progress.toFixed(3),
+                    revealProgress: this.textRevealProgress.toFixed(3),
+                    currentText: currentText,
+                    textLength: currentText.length,
+                    fullLength: targetLength,
+                    elapsed: (elapsed / 1000).toFixed(2) + 's',
+                    modeDuration: (modeDuration / 1000).toFixed(2) + 's',
+                    calculatedLength: calculatedLength
+                });
+            }
+        }
+    }
+    
+    // 현재 표시할 텍스트 가져오기
+    getCurrentText() {
+        // v2일 때는 항상 'cciD' 반환
+        if (this.currentVersion === 'v2') {
+            return 'cciD';
+        }
+        
+        if (!this.currentModeText) {
+            return 'ccid'; // 기본값
+        }
+        
+        // 긴 텍스트일 때 점진적으로 나타나도록
+        if (this.currentModeText.length > 1) {
+            // 진행도에 따라 점진적으로 나타나도록
+            // textRevealProgress가 0일 때는 1글자, 1일 때는 전체 글자
+            const targetLength = this.currentModeText.length;
+            
+            if (this.textRevealProgress <= 0) {
+                return this.currentModeText.substring(0, 1); // 최소 1글자
+            } else if (this.textRevealProgress >= 1) {
+                return this.currentModeText; // 전체 글자
+            } else {
+                // 0과 1 사이: 점진적으로 증가
+                // textRevealProgress가 매우 작을 때는 1글자 유지
+                // 첫 글자가 나타나기 위한 최소 progress 계산
+                const minProgressForSecondChar = 1 / (targetLength - 1); // 두 번째 글자가 나타나기 위한 최소 progress
+                
+                if (this.textRevealProgress < minProgressForSecondChar) {
+                    return this.currentModeText.substring(0, 1); // 첫 글자만
+                } else if (this.textRevealProgress >= 0.99) {
+                    // 거의 완료되었을 때는 전체 글자 표시
+                    return this.currentModeText;
+                } else {
+                    // 두 번째 글자부터 점진적으로 증가
+                    // Math.round를 사용하여 더 정확하게 계산
+                    const revealLength = Math.min(targetLength, Math.round(1 + (targetLength - 1) * this.textRevealProgress));
+                    return this.currentModeText.substring(0, revealLength);
+                }
+            }
+        } else {
+            return this.currentModeText;
+        }
     }
     
     // 둥근 blob 형태 그리기 함수
@@ -406,19 +873,78 @@ class VoronoiPattern {
     }
     
     updateVoronoi() {
+        // 텍스트가 나타날 때 dot들이 겹치지 않도록 이동
+        const isLongText = this.currentModeText && this.currentModeText.length > 1;
+        const isRevealing = isLongText && this.textRevealProgress > 0 && this.textRevealProgress < 1;
+        
+        // 텍스트가 나타나는 동안 repulsion force 적용
+        if (isRevealing) {
+            const repulsionStrength = 0.5 * this.textRevealProgress; // 점진적으로 증가 (더 강하게)
+            const minDistance = this.baseTextSize * 2.5; // 최소 거리 (더 넓게)
+            
+            for (let i = 0; i < this.points.length; i++) {
+                let fx = 0, fy = 0; // force
+                
+                for (let j = 0; j < this.points.length; j++) {
+                    if (i === j) continue;
+                    
+                    const dx = this.points[j][0] - this.points[i][0];
+                    const dy = this.points[j][1] - this.points[i][1];
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist > 0 && dist < minDistance) {
+                        // 너무 가까우면 밀어내기 (ease-in-out 적용)
+                        const normalizedDist = dist / minDistance; // 0~1 범위
+                        const easedDist = this.easeInOut(1 - normalizedDist); // 거리가 가까울수록 큰 값
+                        const force = easedDist;
+                        fx -= (dx / dist) * force * repulsionStrength;
+                        fy -= (dy / dist) * force * repulsionStrength;
+                    }
+                }
+                
+                // force 적용
+                this.points[i][0] += fx;
+                this.points[i][1] += fy;
+                
+                // 경계 체크
+                this.points[i][0] = Math.max(0, Math.min(this.width, this.points[i][0]));
+                this.points[i][1] = Math.max(0, Math.min(this.height, this.points[i][1]));
+            }
+        }
+        
         // 기존 Voronoi 움직임
+        const isV2 = this.currentVersion === 'v2';
+        const currentTime = Date.now() / 1000;
+        
         for (let i = 0; i < this.points.length; i++) {
             const current = this.points[i];
             const target = this.targetPoints[i];
-            const speed = this.speeds[i];
+            let speed = this.speeds[i];
+            
+            // v2일 때 더 빠른 속도와 자유로운 움직임
+            if (isV2) {
+                speed *= 1.5; // 1.5배 빠른 속도
+                
+                // Perlin noise를 사용한 추가적인 자유로운 움직임
+                const noiseX = this.noise2D(current[0] * 0.01 + currentTime * 0.5, current[1] * 0.01 + currentTime * 0.5);
+                const noiseY = this.noise2D(current[0] * 0.01 + currentTime * 0.5 + 100, current[1] * 0.01 + currentTime * 0.5 + 100);
+                const noiseStrength = 15; // noise 강도
+                
+                // noise 기반 추가 움직임
+                this.points[i][0] += (noiseX - 0.5) * noiseStrength;
+                this.points[i][1] += (noiseY - 0.5) * noiseStrength;
+            }
             
             const dx = target[0] - current[0];
             const dy = target[1] - current[1];
             const dist = Math.sqrt(dx * dx + dy * dy);
             
             if (dist < 5) {
+                // v2일 때 더 큰 이동 거리
+                const maxDistance = isV2 ? 200 : 150;
+                const minDistance = isV2 ? 100 : 80;
                 const angle = Math.random() * Math.PI * 2;
-                const distance = 80 + Math.random() * 150;
+                const distance = minDistance + Math.random() * (maxDistance - minDistance);
                 this.targetPoints[i] = [
                     Math.max(0, Math.min(this.width, current[0] + Math.cos(angle) * distance)),
                     Math.max(0, Math.min(this.height, current[1] + Math.sin(angle) * distance))
@@ -453,6 +979,43 @@ class VoronoiPattern {
     }
     
     updateGridDeform(progress) {
+        // 텍스트가 나타날 때 dot들이 겹치지 않도록 이동
+        const isLongText = this.currentModeText && this.currentModeText.length > 1;
+        const isRevealing = isLongText && this.textRevealProgress > 0 && this.textRevealProgress < 1;
+        
+        // 텍스트가 나타나는 동안 repulsion force 적용
+        if (isRevealing) {
+            const repulsionStrength = 0.4 * this.textRevealProgress; // 점진적으로 증가 (더 강하게)
+            const minDistance = this.baseTextSize * 2.5; // 최소 거리 (더 넓게)
+            
+            for (let i = 0; i < this.points.length; i++) {
+                let fx = 0, fy = 0; // force
+                
+                for (let j = 0; j < this.points.length; j++) {
+                    if (i === j) continue;
+                    
+                    const dx = this.points[j][0] - this.points[i][0];
+                    const dy = this.points[j][1] - this.points[i][1];
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist > 0 && dist < minDistance) {
+                        // 너무 가까우면 밀어내기 (ease-in-out 적용)
+                        const normalizedDist = dist / minDistance; // 0~1 범위
+                        const easedDist = this.easeInOut(1 - normalizedDist); // 거리가 가까울수록 큰 값
+                        const force = easedDist;
+                        fx -= (dx / dist) * force * repulsionStrength;
+                        fy -= (dy / dist) * force * repulsionStrength;
+                    }
+                }
+                
+                // force 적용 (gridPositions 기준으로 조정)
+                if (i < this.gridPositions.length) {
+                    this.gridPositions[i][0] += fx;
+                    this.gridPositions[i][1] += fy;
+                }
+            }
+        }
+        
         // Grid 상태에서 Perlin noise로 변형 + 시계 방향 회전
         // 전환 시작과 끝에 easing 적용 (진입: ease-out, 진출: ease-in)
         const elapsed = (Date.now() - this.stateStartTime) / 1000;
@@ -512,6 +1075,41 @@ class VoronoiPattern {
     }
     
     updateGridDynamic(progress) {
+        // 텍스트가 나타날 때 dot들이 겹치지 않도록 이동
+        const isLongText = this.currentModeText && this.currentModeText.length > 1;
+        const isRevealing = isLongText && this.textRevealProgress > 0 && this.textRevealProgress < 1;
+        
+        // 텍스트가 나타나는 동안 repulsion force 적용
+        if (isRevealing) {
+            const repulsionStrength = 0.4 * this.textRevealProgress; // 점진적으로 증가 (더 강하게)
+            const minDistance = this.baseTextSize * 2.5; // 최소 거리 (더 넓게)
+            
+            for (let i = 0; i < this.gridPositions.length; i++) {
+                let fx = 0, fy = 0; // force
+                
+                for (let j = 0; j < this.gridPositions.length; j++) {
+                    if (i === j) continue;
+                    
+                    const dx = this.gridPositions[j][0] - this.gridPositions[i][0];
+                    const dy = this.gridPositions[j][1] - this.gridPositions[i][1];
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist > 0 && dist < minDistance) {
+                        // 너무 가까우면 밀어내기 (ease-in-out 적용)
+                        const normalizedDist = dist / minDistance; // 0~1 범위
+                        const easedDist = this.easeInOut(1 - normalizedDist); // 거리가 가까울수록 큰 값
+                        const force = easedDist;
+                        fx -= (dx / dist) * force * repulsionStrength;
+                        fy -= (dy / dist) * force * repulsionStrength;
+                    }
+                }
+                
+                // force 적용
+                this.gridPositions[i][0] += fx;
+                this.gridPositions[i][1] += fy;
+            }
+        }
+        
         // Grid Dynamic 모드: 회전 + dot/text 크기 애니메이션
         const elapsed = (Date.now() - this.stateStartTime) / 1000;
         
@@ -637,27 +1235,40 @@ class VoronoiPattern {
     }
     
     draw() {
-        // 고품질 렌더링 설정
-        this.ctx.imageSmoothingEnabled = true;
-        this.ctx.imageSmoothingQuality = 'high';
-        
-        // 시간에 따라 크기 noise 오프셋 업데이트 (부드러운 변화를 위해)
-        const currentTime = Date.now() / 1000;
-        this.sizeNoiseOffset = currentTime * 0.2; // 느린 속도로 변화
-        
-        // 캔버스 클리어
-        this.ctx.fillStyle = '#ffffff';
-        this.ctx.fillRect(0, 0, this.width, this.height);
-        
-        // Ellipse 영역 설정 (화면 중앙에 위치)
-        const centerX = this.width / 2;
-        const centerY = this.height / 2;
-        const ellipseWidth = this.height * 0.8; // 화면 너비의 80%
-        const ellipseHeight = this.height * 0.8; // 화면 높이의 60%
-        
-        // Delaunay 삼각분할 생성
-        const delaunay = d3.Delaunay.from(this.points);
-        const voronoi = delaunay.voronoi([0, 0, this.width, this.height]);
+        try {
+            // 고품질 렌더링 설정
+            this.ctx.imageSmoothingEnabled = true;
+            this.ctx.imageSmoothingQuality = 'high';
+            
+            // 시간에 따라 크기 noise 오프셋 업데이트 (부드러운 변화를 위해)
+            const currentTime = Date.now() / 1000;
+            this.sizeNoiseOffset = currentTime * 0.2; // 느린 속도로 변화
+            
+            // 텍스트 시퀀스 업데이트
+            this.updateTextSequence();
+            
+            // 캔버스 클리어 (v2일 때는 #794CD4, 그 외는 #ffffff)
+            this.ctx.fillStyle = this.currentVersion === 'v2' ? '#794CD4' : '#ffffff';
+            this.ctx.fillRect(0, 0, this.width, this.height);
+            
+            // Ellipse 영역 설정 (화면 중앙에 위치)
+            const centerX = this.width / 2;
+            const centerY = this.height / 2;
+            const ellipseWidth = this.height * 0.8; // 화면 너비의 80%
+            const ellipseHeight = this.height * 0.8; // 화면 높이의 60%
+            
+            // Delaunay 삼각분할 생성
+            if (!this.points || this.points.length === 0) {
+                return; // 포인트가 없으면 그리지 않음
+            }
+            
+            if (typeof d3 === 'undefined' || typeof d3.Delaunay === 'undefined') {
+                console.error('d3.Delaunay is not available in draw()');
+                return;
+            }
+            
+            const delaunay = d3.Delaunay.from(this.points);
+            const voronoi = delaunay.voronoi([0, 0, this.width, this.height]);
         
         // Cell 면적 계산 및 저장
         this.cellAreas = [];
@@ -675,6 +1286,10 @@ class VoronoiPattern {
         const totalArea = this.cellAreas.reduce((sum, area) => sum + area, 0);
         const avgArea = totalArea / this.points.length;
         
+        // v2일 때 blob 크기 변형을 위한 변수
+        const isV2 = this.currentVersion === 'v2';
+        const blobSizeNoiseOffset = currentTime * 0.3; // v2일 때 더 빠른 크기 변화
+        
         // Voronoi 셀을 둥근 blob 형태로 그리기
         for (let i = 0; i < this.points.length; i++) {
             const cell = voronoi.renderCell(i);
@@ -685,7 +1300,14 @@ class VoronoiPattern {
                 const y = this.points[i][1];
                 
                 // 면적에 비례한 반지름 계산 (원의 면적 = π * r²)
-                const radius = Math.sqrt(area / Math.PI) * 0.85; // 0.85 배율로 약간 작게
+                let radius = Math.sqrt(area / Math.PI) * 0.85; // 0.85 배율로 약간 작게
+                
+                // v2일 때 blob 크기를 실시간으로 변형
+                if (isV2) {
+                    const sizeNoise = this.noise2D(x * 0.02 + blobSizeNoiseOffset, y * 0.02 + blobSizeNoiseOffset);
+                    const sizeVariation = 0.7 + (sizeNoise + 1) / 2 * 0.6; // 0.7 ~ 1.3 배율
+                    radius *= sizeVariation;
+                }
                 
                 // 커스터마이징된 색상 사용
                 this.ctx.fillStyle = this.cellColorEnabled ? this.cellColor : '#ffffff';
@@ -723,17 +1345,45 @@ class VoronoiPattern {
         const noiseScale = 0.005; // 작은 값으로 더 부드러운 변화
         
         for (let i = 0; i < this.points.length; i++) {
-            const x = this.points[i][0];
-            const y = this.points[i][1];
+            let x = this.points[i][0];
+            let y = this.points[i][1];
+            
+            // v2일 때 dot과 text가 blob의 outline에 위치하도록
+            if (isV2) {
+                const cell = voronoi.renderCell(i);
+                if (cell) {
+                    // cell의 경계점들을 파싱
+                    const boundaryPoints = this.parsePath(cell);
+                    if (boundaryPoints.length > 0) {
+                        // 중심점에서 가장 먼 경계점 찾기
+                        let maxDist = 0;
+                        let farthestPoint = [x, y];
+                        
+                        for (const bp of boundaryPoints) {
+                            const dx = bp[0] - x;
+                            const dy = bp[1] - y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            if (dist > maxDist) {
+                                maxDist = dist;
+                                farthestPoint = bp;
+                            }
+                        }
+                        
+                        // 가장 먼 경계점에 dot과 text 배치
+                        x = farthestPoint[0];
+                        y = farthestPoint[1];
+                    }
+                }
+            }
             
             // Perlin noise를 사용해서 크기 계산 (0~1 범위)
             const noiseValue = this.noise2D(x * noiseScale + this.sizeNoiseOffset, y * noiseScale + this.sizeNoiseOffset);
             // noise 값이 -1~1 범위이므로 0~1로 정규화
             const normalizedNoise = (noiseValue + 1) / 2;
             
-            // 크기 범위 설정 (0.6 ~ 1.4 배율로 부드럽게 변화)
-            let minSize = 0.6;
-            let maxSize = 1.4;
+            // 크기 범위 설정 (v2일 때 더 큰 변형)
+            let minSize = isV2 ? 0.5 : 0.6;
+            let maxSize = isV2 ? 1.6 : 1.4;
             let sizeFactor = minSize + (maxSize - minSize) * normalizedNoise;
             
             // gridDynamic 모드일 때는 동적 크기 배율 적용
@@ -757,47 +1407,69 @@ class VoronoiPattern {
             // 텍스트 위치 및 크기 계산
             const textX = x + dotRadius + 3;
             const textY = y;
-            const text = 'ccid';
+            const text = this.getCurrentText();
             const textMetrics = this.ctx.measureText(text);
             const textWidth = textMetrics.width;
             const textHeight = fontSize;
             
-            // Voronoi 모드일 때만 텍스트 겹침 체크
+            // 텍스트 겹침 체크 및 dot 위치 조정
             let shouldDrawText = true;
-            if (this.animationState === 'voronoi') {
+            let adjustedX = textX;
+            let adjustedY = textY;
+            
+            if (this.animationState === 'voronoi' || this.animationState === 'gridDeform' || this.animationState === 'gridDynamic') {
+                // 긴 텍스트가 나타날 때 dot들이 이동하여 겹치지 않게
+                const isLongText = this.currentModeText && this.currentModeText.length > 1;
+                const isRevealing = isLongText && this.textRevealProgress > 0 && this.textRevealProgress < 1;
+                
                 // 기존에 그려진 텍스트들과의 거리 확인
                 for (const drawnText of drawnTexts) {
                     const dx = textX - drawnText.x;
                     const dy = textY - drawnText.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
                     
-                    // 텍스트 박스 간 최소 거리 (텍스트 높이의 0.5배)
-                    const minDistance = Math.max(textHeight, drawnText.height) * 0.5;
+                    // 텍스트 박스 간 최소 거리 (더 넓게 설정)
+                    const minDistance = Math.max(textHeight, drawnText.height) * 1.2 + textWidth * 0.3;
                     
                     if (dist < minDistance) {
-                        shouldDrawText = false;
-                        break;
+                        // 겹칠 경우 위치 조정 또는 그리지 않기
+                        if (isRevealing) {
+                            // 텍스트가 나타나는 동안 부드럽게 이동 (ease-in-out 적용)
+                            const angle = Math.atan2(dy, dx);
+                            const normalizedDist = dist / minDistance; // 0~1 범위
+                            const easedDist = this.easeInOut(1 - normalizedDist); // 거리가 가까울수록 큰 값
+                            const pushDistance = (minDistance - dist) * 1.5 * easedDist; // ease-in-out 적용
+                            adjustedX += Math.cos(angle) * pushDistance * this.textRevealProgress;
+                            adjustedY += Math.sin(angle) * pushDistance * this.textRevealProgress;
+                        } else {
+                            // 텍스트가 완성된 후에는 겹치면 그리지 않음
+                            shouldDrawText = false;
+                            break;
+                        }
                     }
                 }
             }
             
             // 텍스트 그리기 (겹치지 않을 때만)
-            if (shouldDrawText) {
+            if (shouldDrawText && text.length > 0) {
                 this.ctx.fillStyle = '#000000';
-                this.ctx.fillText(text, textX, textY);
+                this.ctx.fillText(text, adjustedX, adjustedY);
                 
                 // 그려진 텍스트 정보 저장 (Voronoi 모드일 때만)
                 if (this.animationState === 'voronoi') {
                     drawnTexts.push({
-                        x: textX,
-                        y: textY,
+                        x: adjustedX,
+                        y: adjustedY,
                         width: textWidth,
                         height: textHeight
                     });
                 }
             }
         }
-        
+        } catch (error) {
+            console.error('Error in draw():', error);
+            console.error('Stack trace:', error.stack);
+        }
     }
     
     animate() {
@@ -809,5 +1481,25 @@ class VoronoiPattern {
 
 // 페이지 로드 시 시작
 window.addEventListener('load', () => {
-    new VoronoiPattern('voronoiCanvas');
+    try {
+        // d3.Delaunay 로드 확인
+        if (typeof d3 === 'undefined' || typeof d3.Delaunay === 'undefined') {
+            console.error('d3.Delaunay is not loaded! Check CDN connection.');
+            document.body.innerHTML = '<div style="padding: 20px; font-family: sans-serif;"><h1>Error</h1><p>d3.Delaunay library failed to load. Please check your internet connection.</p></div>';
+            return;
+        }
+        
+        const canvas = document.getElementById('voronoiCanvas');
+        if (!canvas) {
+            console.error('Canvas element not found!');
+            return;
+        }
+        
+        console.log('Initializing VoronoiPattern...');
+        new VoronoiPattern('voronoiCanvas');
+        console.log('VoronoiPattern initialized successfully');
+    } catch (error) {
+        console.error('Error initializing VoronoiPattern:', error);
+        console.error('Stack trace:', error.stack);
+    }
 });

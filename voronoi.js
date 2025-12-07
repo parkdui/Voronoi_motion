@@ -26,22 +26,24 @@ class VoronoiPattern {
         this.currentVersion = null; // 현재 활성화된 버전
         
         // 애니메이션 상태 관리
-        this.animationState = 'voronoi'; // 'voronoi', 'toGrid', 'gridDeform', 'gridDynamic', 'toVoronoi'
+        this.animationState = 'cciDGrid'; // 'cciDGrid', 'toCreative', 'voronoi', 'toGrid', 'gridDeform', 'gridDynamic', 'toVoronoi'
         this.animationTime = 0;
         this.stateStartTime = 0;
         this.stateDuration = 3000; // 3초 (기본)
         this.gridDynamicDuration = 5000; // gridDynamic 모드 전용 duration (4초)
         this.gridPositions = []; // Grid 위치 저장
+        this.cciDGridPositions = []; // cciD Grid 단계용 정렬된 Grid 위치
         this.noiseOffset = 0; // Perlin noise 오프셋
         this.sizeNoiseOffset = 0; // 크기 계산용 Perlin noise 오프셋
         this.originalVoronoiPoints = []; // Voronoi로 돌아갈 때 사용할 원래 위치
         this.dynamicSizeMultiplier = 1; // gridDynamic 모드에서 사용할 크기 배율
         this.gridDeformEndPoints = []; // gridDeform 종료 시점의 포인트 위치 저장
         this.gridDynamicEndPoints = []; // gridDynamic 종료 시점의 포인트 위치 저장
+        this.cciDGridEndPoints = []; // cciDGrid 종료 시점의 포인트 위치 저장
         
         // 텍스트 애니메이션 관리 (모드 기반)
         this.textRevealProgress = 0; // 텍스트가 점진적으로 나타나는 진행도
-        this.currentModeText = 'creative'; // 현재 모드의 텍스트 (초기값: voronoi 모드)
+        this.currentModeText = 'cciD'; // 현재 모드의 텍스트 (초기값: cciDGrid 모드)
         this.lastLogTime = null; // 디버깅용
         
         this.resize();
@@ -86,6 +88,7 @@ class VoronoiPattern {
         }
         // Grid 위치 재계산
         this.calculateGridPositions();
+        this.calculateCciDGridPositions();
     }
     
     init() {
@@ -96,9 +99,19 @@ class VoronoiPattern {
         this.colors = [];
         this.cellAreas = [];
         
+        // cciD Grid 위치 계산
+        this.calculateCciDGridPositions();
+        
         for (let i = 0; i < this.numPoints; i++) {
-            const x = Math.random() * this.width;
-            const y = Math.random() * this.height;
+            // 초기 상태가 cciDGrid이면 Grid 위치 사용, 아니면 랜덤
+            let x, y;
+            if (this.animationState === 'cciDGrid' && i < this.cciDGridPositions.length) {
+                x = this.cciDGridPositions[i][0];
+                y = this.cciDGridPositions[i][1];
+            } else {
+                x = Math.random() * this.width;
+                y = Math.random() * this.height;
+            }
             
             this.points.push([x, y]);
             this.targetPoints.push([x, y]);
@@ -107,8 +120,10 @@ class VoronoiPattern {
             this.speeds.push(0.01 + Math.random() * 0.03);
         }
         
-        // 초기 목표 위치 설정
-        this.setNewTargets();
+        // 초기 목표 위치 설정 (cciDGrid 상태가 아닐 때만)
+        if (this.animationState !== 'cciDGrid') {
+            this.setNewTargets();
+        }
         
         // Grid 위치 계산
         this.calculateGridPositions();
@@ -119,7 +134,7 @@ class VoronoiPattern {
         // 애니메이션 시작 시간 설정
         this.stateStartTime = Date.now();
         // 초기 모드에 맞는 텍스트 설정
-        this.currentModeText = 'creative';
+        this.currentModeText = this.animationState === 'cciDGrid' ? 'cciD' : 'creative';
         this.textRevealProgress = 0;
     }
     
@@ -245,6 +260,9 @@ class VoronoiPattern {
         const v1Button = document.getElementById('v1Button');
         const v2Button = document.getElementById('v2Button');
         const v3Button = document.getElementById('v3Button');
+        const v4Button = document.getElementById('v4Button');
+        const v5Button = document.getElementById('v5Button');
+        const v6Button = document.getElementById('v6Button');
         
         // v1 버튼: 저장된 설정 로드
         v1Button.addEventListener('click', () => {
@@ -263,6 +281,27 @@ class VoronoiPattern {
             });
         }
         
+        // v4 버튼: pixelated grid Voronoi
+        if (v4Button) {
+            v4Button.addEventListener('click', () => {
+                this.switchToVersion('v4');
+            });
+        }
+        
+        // v5 버튼: p5.js JavaScript only Voronoi
+        if (v5Button) {
+            v5Button.addEventListener('click', () => {
+                this.switchToVersion('v5');
+            });
+        }
+        
+        // v6 버튼: pixelated grid Voronoi (v4 복제)
+        if (v6Button) {
+            v6Button.addEventListener('click', () => {
+                this.switchToVersion('v6');
+            });
+        }
+        
         // 초기 활성 버튼 설정 (v1이 저장되어 있으면 v1 활성화)
         if (this.versions.v1) {
             this.updateActiveButton('v1');
@@ -274,9 +313,18 @@ class VoronoiPattern {
         if (version === 'v3') {
             // v3로 전환: p5.js 사용
             this.switchToV3();
+        } else if (version === 'v4') {
+            // v4로 전환: p5.js 사용
+            this.switchToV4();
+        } else if (version === 'v5') {
+            // v5로 전환: p5.js 사용
+            this.switchToV5();
+        } else if (version === 'v6') {
+            // v6로 전환: p5.js 사용
+            this.switchToV6();
         } else {
             // v1 또는 v2로 전환: 기존 canvas 사용
-            this.switchFromV3();
+            this.switchFromP5();
             
             if (this.versions[version]) {
                 this.loadVersion(version);
@@ -353,18 +401,264 @@ class VoronoiPattern {
         this.updateActiveButton('v3');
     }
     
-    // v3에서 다른 버전으로 전환
-    switchFromV3() {
-        // p5.js 제거
+    // v4로 전환
+    switchToV4() {
+        console.log('Switching to v4...');
+        
+        // 기존 canvas 숨기기
+        if (this.canvas) {
+            this.canvas.style.display = 'none';
+        }
+        
+        // 기존 컨트롤 숨기기
+        const controlGroups = document.querySelectorAll('#controlPanel > .control-group');
+        controlGroups.forEach(group => {
+            group.style.display = 'none';
+        });
+        
+        // v3 Tweakpane 숨기기
+        if (typeof hideV3Controls === 'function') {
+            hideV3Controls();
+        }
+        
+        // v3 p5.js 인스턴스 제거
         if (window.v3P5Instance) {
             window.v3P5Instance.remove();
             window.v3P5Instance = null;
+        }
+        
+        // Tweakpane이 아직 생성되지 않았으면 먼저 생성 시도
+        if (typeof setupV4Controls === 'function' && typeof Tweakpane !== 'undefined') {
+            // v4PARAMS가 없으면 기본값으로 초기화
+            if (typeof v4PARAMS === 'undefined' || v4PARAMS === null) {
+                window.v4PARAMS = {
+                    Mode: 'Colorful',
+                    Speed: 0.06,
+                    Scale: 6.0,
+                    Smin: 1.0,
+                    GridSize: 15,
+                    SpreadSpeed: 1.2,
+                    Color0: { r: 167/255, g: 111/255, b: 255/255 },
+                    Color1: { r: 246/255, g: 255/255, b: 67/255 },
+                    Color2: { r: 78/255, g: 255/255, b: 102/255 },
+                    Color3: { r: 51/255, g: 255/255, b: 236/255 }
+                };
+            }
+            setupV4Controls();
+        }
+        
+        // p5.js 초기화 (아직 초기화되지 않았으면)
+        if (!window.v4P5Instance && typeof p5 !== 'undefined' && typeof v4Sketch !== 'undefined') {
+            try {
+                window.v4P5Instance = new p5(v4Sketch);
+                console.log('v4 p5.js instance created');
+            } catch (error) {
+                console.error('Error creating v4 p5.js instance:', error);
+            }
+        } else if (!window.v4P5Instance) {
+            console.error('p5.js or v4Sketch not available');
+        }
+        
+        // 컨트롤 표시 (약간의 지연 후)
+        setTimeout(() => {
+            if (typeof showV4Controls === 'function') {
+                showV4Controls();
+            }
+        }, 200);
+        
+        this.currentVersion = 'v4';
+        this.updateActiveButton('v4');
+    }
+    
+    // v5로 전환
+    switchToV5() {
+        console.log('Switching to v5...');
+        
+        // 기존 canvas 숨기기
+        if (this.canvas) {
+            this.canvas.style.display = 'none';
+        }
+        
+        // 기존 컨트롤 숨기기
+        const controlGroups = document.querySelectorAll('#controlPanel > .control-group');
+        controlGroups.forEach(group => {
+            const isV5Control = group.id === 'v5DotSizeGroup' || group.id === 'v5TextSizeGroup';
+            if (!isV5Control) {
+                group.style.display = 'none';
+            } else {
+                group.style.display = 'block';
+            }
+        });
+        
+        // Tweakpane이 아직 생성되지 않았으면 먼저 생성 시도
+        if (typeof setupV5Controls === 'function' && typeof Tweakpane !== 'undefined') {
+            // v5PARAMS가 없으면 기본값으로 초기화
+            if (typeof v5PARAMS === 'undefined' || v5PARAMS === null) {
+                window.v5PARAMS = {
+                    Mode: 'Fill',
+                    FillColor: { r: 1, g: 1, b: 1 },
+                    Contour: false,
+                    Edge: true,
+                    EdgeColor: { r: 121/255, g: 76/255, b: 212/255 },
+                    Point: true,
+                    PointColor: { r: 0, g: 0, b: 0 },
+                    Speed: 0.027,
+                    Scale: 7.7,
+                    Smin: 1.0,
+                    DotSize: 6.0,
+                    TextSize: 24,
+                };
+            }
+            setupV5Controls();
+        }
+        
+        // p5.js 초기화 (아직 초기화되지 않았으면)
+        if (!window.v5P5Instance && typeof p5 !== 'undefined' && typeof v5Sketch !== 'undefined') {
+            try {
+                window.v5P5Instance = new p5(v5Sketch);
+                console.log('v5 p5.js instance created');
+            } catch (error) {
+                console.error('Error creating p5.js instance:', error);
+            }
+        } else if (!window.v5P5Instance) {
+            console.error('p5.js or v5Sketch not available');
+        }
+        
+        // 컨트롤 표시 (약간의 지연 후)
+        setTimeout(() => {
+            if (typeof showV5Controls === 'function') {
+                showV5Controls();
+            }
+        }, 200);
+        
+        this.currentVersion = 'v5';
+        this.updateActiveButton('v5');
+    }
+    
+    // v6로 전환
+    switchToV6() {
+        console.log('Switching to v6...');
+        
+        // 기존 canvas 숨기기
+        if (this.canvas) {
+            this.canvas.style.display = 'none';
+        }
+        
+        // 기존 컨트롤 숨기기
+        const controlGroups = document.querySelectorAll('#controlPanel > .control-group');
+        controlGroups.forEach(group => {
+            group.style.display = 'none';
+        });
+        
+        // v3 Tweakpane 숨기기
+        if (typeof hideV3Controls === 'function') {
+            hideV3Controls();
+        }
+        
+        // v3, v4, v5 p5.js 인스턴스 제거
+        if (window.v3P5Instance) {
+            window.v3P5Instance.remove();
+            window.v3P5Instance = null;
+        }
+        
+        if (window.v4P5Instance) {
+            window.v4P5Instance.remove();
+            window.v4P5Instance = null;
+        }
+        
+        if (window.v5P5Instance) {
+            window.v5P5Instance.remove();
+            window.v5P5Instance = null;
+        }
+        
+        // Tweakpane이 아직 생성되지 않았으면 먼저 생성 시도
+        if (typeof setupV6Controls === 'function' && typeof Tweakpane !== 'undefined') {
+            // v6PARAMS가 없으면 기본값으로 초기화
+            if (typeof v6PARAMS === 'undefined' || v6PARAMS === null) {
+                window.v6PARAMS = {
+                    Mode: 'Colorful',
+                    Speed: 0.06,
+                    Scale: 6.0,
+                    Smin: 1.0,
+                    GridSize: 15,
+                    SpreadSpeed: 1.2,
+                    Color0: { r: 167/255, g: 111/255, b: 255/255 },
+                    Color1: { r: 246/255, g: 255/255, b: 67/255 },
+                    Color2: { r: 78/255, g: 255/255, b: 102/255 },
+                    Color3: { r: 51/255, g: 255/255, b: 236/255 }
+                };
+            }
+            setupV6Controls();
+        }
+        
+        // p5.js 초기화 (아직 초기화되지 않았으면)
+        if (!window.v6P5Instance && typeof p5 !== 'undefined' && typeof v6Sketch !== 'undefined') {
+            try {
+                window.v6P5Instance = new p5(v6Sketch);
+                console.log('v6 p5.js instance created');
+            } catch (error) {
+                console.error('Error creating v6 p5.js instance:', error);
+            }
+        } else if (!window.v6P5Instance) {
+            console.error('p5.js or v6Sketch not available');
+        }
+        
+        // 컨트롤 표시 (약간의 지연 후)
+        setTimeout(() => {
+            if (typeof showV6Controls === 'function') {
+                showV6Controls();
+            }
+        }, 200);
+        
+        this.currentVersion = 'v6';
+        this.updateActiveButton('v6');
+    }
+    
+    // p5.js 기반 버전에서 다른 버전으로 전환
+    switchFromP5() {
+        // v3 p5.js 제거
+        if (window.v3P5Instance) {
+            window.v3P5Instance.remove();
+            window.v3P5Instance = null;
+        }
+        
+        // v4 p5.js 제거
+        if (window.v4P5Instance) {
+            window.v4P5Instance.remove();
+            window.v4P5Instance = null;
+        }
+        
+        // v5 p5.js 제거
+        if (window.v5P5Instance) {
+            window.v5P5Instance.remove();
+            window.v5P5Instance = null;
+        }
+        
+        // v6 p5.js 제거
+        if (window.v6P5Instance) {
+            window.v6P5Instance.remove();
+            window.v6P5Instance = null;
         }
         
         // Tweakpane 제거
         if (typeof v3Pane !== 'undefined' && v3Pane) {
             v3Pane.dispose();
             v3Pane = null;
+        }
+        
+        if (typeof v4Pane !== 'undefined' && v4Pane) {
+            v4Pane.dispose();
+            v4Pane = null;
+        }
+        
+        if (typeof v5Pane !== 'undefined' && v5Pane) {
+            v5Pane.dispose();
+            v5Pane = null;
+        }
+        
+        if (typeof v6Pane !== 'undefined' && v6Pane) {
+            v6Pane.dispose();
+            v6Pane = null;
         }
         
         // 기존 canvas 보이기
@@ -383,10 +677,21 @@ class VoronoiPattern {
             }
         });
         
-        // v3 컨트롤 숨기기
+        // v3, v4, v6 컨트롤 숨기기
         if (typeof hideV3Controls === 'function') {
             hideV3Controls();
         }
+        if (typeof hideV4Controls === 'function') {
+            hideV4Controls();
+        }
+        if (typeof hideV6Controls === 'function') {
+            hideV6Controls();
+        }
+    }
+    
+    // v3에서 다른 버전으로 전환 (deprecated, use switchFromP5)
+    switchFromV3() {
+        this.switchFromP5();
     }
     
     // 현재 설정을 버전으로 저장
@@ -444,7 +749,14 @@ class VoronoiPattern {
         this.updateUIFromConfig(config);
         
         // 포인트 재초기화 (numPoints가 변경되었을 수 있음)
+        // 애니메이션 상태를 cciDGrid로 재설정
+        this.animationState = 'cciDGrid';
         this.init();
+        
+        // 애니메이션 상태 재설정 (init() 후에 다시 설정)
+        this.stateStartTime = Date.now();
+        this.currentModeText = 'cciD';
+        this.textRevealProgress = 0;
         
         this.currentVersion = version;
         console.log(`${version} 버전이 로드되었습니다.`, config);
@@ -502,11 +814,17 @@ class VoronoiPattern {
         const v1Button = document.getElementById('v1Button');
         const v2Button = document.getElementById('v2Button');
         const v3Button = document.getElementById('v3Button');
+        const v4Button = document.getElementById('v4Button');
+        const v5Button = document.getElementById('v5Button');
+        const v6Button = document.getElementById('v6Button');
         
         // 모든 버튼에서 active 클래스 제거
         if (v1Button) v1Button.classList.remove('active');
         if (v2Button) v2Button.classList.remove('active');
         if (v3Button) v3Button.classList.remove('active');
+        if (v4Button) v4Button.classList.remove('active');
+        if (v5Button) v5Button.classList.remove('active');
+        if (v6Button) v6Button.classList.remove('active');
         
         // 선택된 버튼에 active 클래스 추가
         if (version === 'v1' && v1Button) {
@@ -515,6 +833,12 @@ class VoronoiPattern {
             v2Button.classList.add('active');
         } else if (version === 'v3' && v3Button) {
             v3Button.classList.add('active');
+        } else if (version === 'v4' && v4Button) {
+            v4Button.classList.add('active');
+        } else if (version === 'v5' && v5Button) {
+            v5Button.classList.add('active');
+        } else if (version === 'v6' && v6Button) {
+            v6Button.classList.add('active');
         }
     }
     
@@ -528,6 +852,10 @@ class VoronoiPattern {
         let modeDuration = this.stateDuration; // 밀리초 단위
         
         switch (this.animationState) {
+            case 'cciDGrid':
+                modeText = 'cciD';
+                modeDuration = this.stateDuration;
+                break;
             case 'voronoi':
                 modeText = 'creative';
                 modeDuration = this.stateDuration;
@@ -707,6 +1035,49 @@ class VoronoiPattern {
     }
     
     // 해바라기 씨 배열 (피보나치 나선) 위치 계산
+    // cciD Grid 단계용 정렬된 Grid 위치 계산
+    calculateCciDGridPositions() {
+        this.cciDGridPositions = [];
+        const centerX = this.width / 2;
+        const centerY = this.height / 2;
+        const ellipseWidth = this.height * 0.8;
+        const ellipseHeight = this.height * 0.8;
+        
+        // Grid 행과 열 수 계산 (정사각형에 가깝게)
+        const cols = Math.ceil(Math.sqrt(this.numPoints));
+        const rows = Math.ceil(this.numPoints / cols);
+        
+        // Grid 간격 계산
+        const gridSpacingX = ellipseWidth / (cols + 1);
+        const gridSpacingY = ellipseHeight / (rows + 1);
+        
+        let pointIndex = 0;
+        for (let row = 0; row < rows && pointIndex < this.numPoints; row++) {
+            for (let col = 0; col < cols && pointIndex < this.numPoints; col++) {
+                // Grid 위치 계산
+                const x = centerX - ellipseWidth / 2 + gridSpacingX * (col + 1);
+                const y = centerY - ellipseHeight / 2 + gridSpacingY * (row + 1);
+                
+                // Ellipse 내부인지 확인
+                const dx = (x - centerX) / (ellipseWidth / 2);
+                const dy = (y - centerY) / (ellipseHeight / 2);
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist <= 1) {
+                    this.cciDGridPositions.push([x, y]);
+                } else {
+                    // Ellipse 밖이면 가장 가까운 경계점으로
+                    const boundaryAngle = Math.atan2(dy, dx);
+                    this.cciDGridPositions.push([
+                        centerX + Math.cos(boundaryAngle) * (ellipseWidth / 2),
+                        centerY + Math.sin(boundaryAngle) * (ellipseHeight / 2)
+                    ]);
+                }
+                pointIndex++;
+            }
+        }
+    }
+    
     calculateGridPositions() {
         this.gridPositions = [];
         const centerX = this.width / 2;
@@ -817,6 +1188,12 @@ class VoronoiPattern {
         
         // 상태에 따른 업데이트
         switch (this.animationState) {
+            case 'cciDGrid':
+                this.updateCciDGrid();
+                break;
+            case 'toCreative':
+                this.updateToCreative(progress);
+                break;
             case 'voronoi':
                 this.updateVoronoi();
                 break;
@@ -839,6 +1216,17 @@ class VoronoiPattern {
         this.stateStartTime = Date.now();
         
         switch (this.animationState) {
+            case 'cciDGrid':
+                // cciD Grid -> creative Voronoi로 전환
+                this.cciDGridEndPoints = this.points.map(p => [p[0], p[1]]);
+                this.animationState = 'toCreative';
+                // Voronoi target 위치 설정
+                this.setNewTargets();
+                break;
+            case 'toCreative':
+                // creative Voronoi 도달
+                this.animationState = 'voronoi';
+                break;
             case 'voronoi':
                 // Voronoi -> Grid로 이동
                 this.animationState = 'toGrid';
@@ -866,9 +1254,44 @@ class VoronoiPattern {
                 this.setNewTargets();
                 break;
             case 'toVoronoi':
-                // Voronoi 복귀 완료 -> 다시 Voronoi 모드
-                this.animationState = 'voronoi';
+                // Voronoi 복귀 완료 -> 다시 cciD Grid 모드
+                this.animationState = 'cciDGrid';
+                // cciD Grid 위치로 초기화
+                this.calculateCciDGridPositions();
+                for (let i = 0; i < this.points.length; i++) {
+                    if (i < this.cciDGridPositions.length) {
+                        this.points[i][0] = this.cciDGridPositions[i][0];
+                        this.points[i][1] = this.cciDGridPositions[i][1];
+                    }
+                }
                 break;
+        }
+    }
+    
+    // cciD Grid 모드 업데이트
+    updateCciDGrid() {
+        // Grid 위치로 정렬 유지 (움직임 없음)
+        for (let i = 0; i < this.points.length; i++) {
+            if (i < this.cciDGridPositions.length) {
+                this.points[i][0] = this.cciDGridPositions[i][0];
+                this.points[i][1] = this.cciDGridPositions[i][1];
+            }
+        }
+    }
+    
+    // cciD Grid에서 creative Voronoi로 전환
+    updateToCreative(progress) {
+        // Ease-in-out으로 Voronoi 위치로 이동 (부드러운 전환)
+        const easedProgress = this.easeInOut(progress);
+        
+        for (let i = 0; i < this.points.length; i++) {
+            if (i < this.cciDGridEndPoints.length && i < this.targetPoints.length) {
+                const start = this.cciDGridEndPoints[i];
+                const end = this.targetPoints[i];
+                
+                this.points[i][0] = start[0] + (end[0] - start[0]) * easedProgress;
+                this.points[i][1] = start[1] + (end[1] - start[1]) * easedProgress;
+            }
         }
     }
     

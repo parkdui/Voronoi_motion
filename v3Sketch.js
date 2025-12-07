@@ -26,13 +26,15 @@ let v3Sketch = function(p) {
         const TAU = Math.PI * 2;
         const aspectRatio = p.width / p.height;
         
-        // shader 좌표 변환
+        // shader 좌표 변환 (정확히 동일)
+        // shader: uv = (gl_FragCoord/resolution - 0.5) * [aspectRatio, 1]
         let uvX = (screenX / p.width - 0.5) * aspectRatio;
         let uvY = screenY / p.height - 0.5;
+        // shader: uv *= Scale
         uvX *= scale;
         uvY *= scale;
         
-        // voronoi: iuv = floor(uv)
+        // voronoi: iuv = floor(uv), fuv = fract(uv)
         const iuvX = Math.floor(uvX);
         const iuvY = Math.floor(uvY);
         const fuvX = uvX - iuvX;
@@ -40,35 +42,44 @@ let v3Sketch = function(p) {
         
         let minDist = Infinity;
         let closestCell = null;
+        let moff = [0, 0];
         
         // 주변 3x3 그리드 확인 (shader와 동일)
         for (let x = -1; x <= 1; x++) {
             for (let y = -1; y <= 1; y++) {
-                const offX = iuvX + x;
-                const offY = iuvY + y;
-                const pos = hash2([offX, offY]);
-                
+                const off = [x, y];
+                // shader: pos = hash2(iuv+off)
+                const pos = hash2([iuvX + off[0], iuvY + off[1]]);
+                // shader: pos = .5+.49*sin(t+pos*TAU)
                 const animatedPos = [
                     0.5 + 0.49 * Math.sin(time + pos[0] * TAU),
                     0.5 + 0.49 * Math.sin(time + pos[1] * TAU)
                 ];
-                
-                const dirX = animatedPos[0] + x - fuvX;
-                const dirY = animatedPos[1] + y - fuvY;
+                // shader: dir = pos+off-fuv
+                const dirX = animatedPos[0] + off[0] - fuvX;
+                const dirY = animatedPos[1] + off[1] - fuvY;
+                // shader: dst = dot(dir, dir)
                 const dist = dirX * dirX + dirY * dirY;
                 
                 if (dist < minDist) {
                     minDist = dist;
+                    moff = off;
                     // cell 중심의 shader 좌표 계산
                     // shader에서: dir = pos+off-fuv
-                    // cell 중심의 shader space 좌표 = iuv + pos + off
-                    // offX = iuvX + x, offY = iuvY + y이므로:
-                    const cellCenterShaderX = offX + animatedPos[0];
-                    const cellCenterShaderY = offY + animatedPos[1];
+                    // cell 중심에서 fuv=0이므로: dir = pos+off
+                    // cell 중심의 shader 좌표 = iuv + pos + off = (iuv + off) + pos
+                    const cellIuvX = iuvX + off[0];
+                    const cellIuvY = iuvY + off[1];
+                    const cellCenterShaderX = cellIuvX + animatedPos[0];
+                    const cellCenterShaderY = cellIuvY + animatedPos[1];
                     
-                    // 화면 좌표로 역변환
+                    // 화면 좌표로 역변환 (정확히 동일)
                     // shader: uv = (gl_FragCoord/resolution - 0.5) * [aspectRatio, 1] * Scale
-                    // 역변환: screenCoord = ((uv/Scale) / [aspectRatio, 1] + 0.5) * resolution
+                    // 역변환: 
+                    // 1. uv/Scale
+                    // 2. /[aspectRatio, 1]
+                    // 3. +0.5
+                    // 4. *resolution
                     const normalizedX = cellCenterShaderX / scale;
                     const normalizedY = cellCenterShaderY / scale;
                     const centerX = (normalizedX / aspectRatio + 0.5) * p.width;
@@ -77,7 +88,7 @@ let v3Sketch = function(p) {
                     closestCell = {
                         centerX: centerX,
                         centerY: centerY,
-                        iuv: [offX, offY]
+                        iuv: [cellIuvX, cellIuvY]
                     };
                 }
             }
@@ -87,56 +98,82 @@ let v3Sketch = function(p) {
     }
     
     // Cell 중심점 계산 (shader의 point 위치와 정확히 동일)
-    // shader에서 point는 각 cell의 중심에 그려지는데, 이는 voronoi 함수에서 계산된 위치입니다
+    // shader에서 Point는 각 cell의 중심에 그려지므로, 각 cell의 중심점을 직접 계산
+    // cell 중심점에서 mdst를 계산하여 정확한 위치 확인
     function getCellPositions(time, scale, numCells) {
         const TAU = Math.PI * 2;
         const aspectRatio = p.width / p.height;
         const centerRadius = 0.35; // shader와 동일
         const cellMap = new Map(); // 중복 제거용
         
-        // 가능한 모든 cell의 iuv 범위를 순회
-        // 중앙 영역에 해당하는 cell만 찾기
-        const gridRange = Math.ceil(centerRadius * scale * 2) + 2;
+        // 가능한 모든 cell의 범위를 순회
+        const gridRange = Math.ceil(centerRadius * scale * 2) + 3;
         
-        for (let iuvX = -gridRange; iuvX <= gridRange; iuvX++) {
-            for (let iuvY = -gridRange; iuvY <= gridRange; iuvY++) {
-                // shader의 voronoi 함수와 동일한 로직
-                // pos = hash2(iuv+off), 여기서 off는 0 (자기 자신)
-                const pos = hash2([iuvX, iuvY]);
-                // pos = .5+.49*sin(t+pos*TAU)
+        // 모든 가능한 cellIuv를 순회하여 중심점 직접 계산
+        for (let cellIuvX = -gridRange; cellIuvX <= gridRange; cellIuvX++) {
+            for (let cellIuvY = -gridRange; cellIuvY <= gridRange; cellIuvY++) {
+                // shader와 동일한 로직으로 cell 중심점 계산
+                const pos = hash2([cellIuvX, cellIuvY]);
                 const animatedPos = [
                     0.5 + 0.49 * Math.sin(time + pos[0] * TAU),
                     0.5 + 0.49 * Math.sin(time + pos[1] * TAU)
                 ];
                 
-                // shader에서 point가 그려지는 위치는 각 cell의 중심점
-                // cell 중심의 shader 좌표 = iuv + pos (off는 0이므로)
-                // 하지만 실제로는 voronoi 함수에서 가장 가까운 cell을 찾을 때
-                // dir = pos+off-fuv에서 pos+off가 cell 중심의 상대 위치
-                // 실제 cell 중심 = iuv + pos + off (여기서 off는 해당 cell의 offset)
-                // point는 각 cell의 중심에 그려지므로, iuv + pos가 cell 중심
-                const cellCenterShaderX = iuvX + animatedPos[0];
-                const cellCenterShaderY = iuvY + animatedPos[1];
+                // cell 중심의 shader 좌표 = cellIuv + animatedPos
+                const cellCenterShaderX = cellIuvX + animatedPos[0];
+                const cellCenterShaderY = cellIuvY + animatedPos[1];
                 
                 // 화면 좌표로 변환 (shader의 역변환)
-                // shader: uv = (gl_FragCoord/resolution - 0.5) * [aspectRatio, 1] * Scale
-                // 역변환: screenCoord = ((uv/Scale) / [aspectRatio, 1] + 0.5) * resolution
                 const normalizedX = cellCenterShaderX / scale;
                 const normalizedY = cellCenterShaderY / scale;
                 
-                // 중앙 영역에 있는지 확인 (shader와 동일한 로직)
+                // 중앙 영역 확인
                 const distFromCenter = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
                 if (distFromCenter <= centerRadius) {
+                    // 화면 좌표로 변환
                     const centerX = (normalizedX / aspectRatio + 0.5) * p.width;
                     const centerY = (normalizedY + 0.5) * p.height;
                     
-                    const key = `${iuvX},${iuvY}`;
-                    if (!cellMap.has(key)) {
-                        cellMap.set(key, {
-                            centerX: centerX,
-                            centerY: centerY,
-                            iuv: [iuvX, iuvY]
-                        });
+                    // cell 중심점에서 mdst를 계산하여 정확성 확인
+                    // cell 중심점의 shader 좌표를 다시 변환
+                    const testUvX = (centerX / p.width - 0.5) * aspectRatio * scale;
+                    const testUvY = (centerY / p.height - 0.5) * scale;
+                    const testIuvX = Math.floor(testUvX);
+                    const testIuvY = Math.floor(testUvY);
+                    const testFuvX = testUvX - testIuvX;
+                    const testFuvY = testUvY - testIuvY;
+                    
+                    // 이 위치에서 mdst 계산
+                    let mdst = 8;
+                    for (let x = -1; x <= 1; x++) {
+                        for (let y = -1; y <= 1; y++) {
+                            const off = [x, y];
+                            const testPos = hash2([testIuvX + off[0], testIuvY + off[1]]);
+                            const testAnimatedPos = [
+                                0.5 + 0.49 * Math.sin(time + testPos[0] * TAU),
+                                0.5 + 0.49 * Math.sin(time + testPos[1] * TAU)
+                            ];
+                            const dirX = testAnimatedPos[0] + off[0] - testFuvX;
+                            const dirY = testAnimatedPos[1] + off[1] - testFuvY;
+                            const dst = dirX * dirX + dirY * dirY;
+                            if (dst < mdst) {
+                                mdst = dst;
+                            }
+                        }
+                    }
+                    
+                    // mdst가 매우 작으면 (Point가 그려지는 위치)
+                    if (mdst < 0.1) {
+                        // cell 식별자로 중복 제거
+                        const cellKey = `${cellIuvX},${cellIuvY}`;
+                        if (!cellMap.has(cellKey) || cellMap.get(cellKey).mdst > mdst) {
+                            cellMap.set(cellKey, {
+                                centerX: centerX,
+                                centerY: centerY,
+                                iuv: [cellIuvX, cellIuvY],
+                                mdst: mdst
+                            });
+                        }
                     }
                 }
             }
@@ -146,9 +183,11 @@ let v3Sketch = function(p) {
         const cellsArray = Array.from(cellMap.values());
         
         // 거리순으로 정렬하고 가까운 30개만 선택
+        const centerX = p.width / 2;
+        const centerY = p.height / 2;
         cellsArray.sort((a, b) => {
-            const distA = Math.sqrt(Math.pow(a.centerX - p.width/2, 2) + Math.pow(a.centerY - p.height/2, 2));
-            const distB = Math.sqrt(Math.pow(b.centerX - p.width/2, 2) + Math.pow(b.centerY - p.height/2, 2));
+            const distA = Math.sqrt(Math.pow(a.centerX - centerX, 2) + Math.pow(a.centerY - centerY, 2));
+            const distB = Math.sqrt(Math.pow(b.centerX - centerX, 2) + Math.pow(b.centerY - centerY, 2));
             return distA - distB;
         });
         
@@ -327,99 +366,34 @@ let v3Sketch = function(p) {
 
         p.image(WebGL, 0, 0);
         
-        // Text 그리기 (point 위치를 따라)
-        // shader에서 point는 각 cell의 중심에 그려지므로, 그 위치를 정확히 계산
-        // shader의 point는 voro.z (mdst)가 0.003~0.005 사이일 때 그려지는데,
-        // 이것은 각 픽셀에서 가장 가까운 cell까지의 거리입니다.
-        // 따라서 각 cell의 중심점을 정확히 계산해야 합니다.
+        // Text 그리기 (point 위치를 정확히 따라)
+        // getCellPositions 함수를 사용하여 cell 중심점 계산
         OverlayCanvas.clear();
+        
+        // Point가 활성화되어 있을 때만 텍스트 그리기
+        if (!PARAMS.Point) {
+            p.image(OverlayCanvas, 0, 0);
+            return;
+        }
+        
         OverlayCanvas.fill(0); // #000 color
         OverlayCanvas.noStroke();
-        OverlayCanvas.textAlign(p.LEFT);
+        OverlayCanvas.textAlign(p.CENTER, p.CENTER); // 중앙 정렬
         
         const time = p.frameCount * PARAMS.Speed;
-        const scale = PARAMS.Scale;
-        const aspectRatio = p.width / p.height;
-        const TAU = Math.PI * 2;
-        const centerRadius = 0.35;
         const textSize = PARAMS.TextSize || 24;
         const text = 'cciD';
         
-        // shader의 point 위치를 정확히 계산
-        // shader에서 point는 voro.z (mdst)가 0.003~0.005 사이일 때 그려집니다
-        // mdst = dot(dir, dir)이고, dir = pos+off-fuv입니다
-        // cell 중심 = iuv + pos + off (shader space에서)
-        const cellMap = new Map();
+        // getCellPositions 함수를 사용하여 cell 중심점 가져오기
+        const cellsArray = getCellPositions(time, PARAMS.Scale, 30);
         
-        // 가능한 모든 cell의 범위를 순회
-        const gridRange = Math.ceil(centerRadius * scale * 2) + 2;
-        
-        for (let iuvX = -gridRange; iuvX <= gridRange; iuvX++) {
-            for (let iuvY = -gridRange; iuvY <= gridRange; iuvY++) {
-                // 각 iuv에 대해 주변 offset을 확인
-                // shader의 voronoi 함수는 3x3 그리드를 확인하므로
-                for (let offX = -1; offX <= 1; offX++) {
-                    for (let offY = -1; offY <= 1; offY++) {
-                        // cell 식별자: iuv + off
-                        const cellIuvX = iuvX + offX;
-                        const cellIuvY = iuvY + offY;
-                        
-                        // shader와 동일한 로직으로 cell 중심점 계산
-                        // shader에서: pos = hash2(iuv+off), pos = .5+.49*sin(t+pos*TAU)
-                        const pos = hash2([cellIuvX, cellIuvY]);
-                        const animatedPos = [
-                            0.5 + 0.49 * Math.sin(time + pos[0] * TAU),
-                            0.5 + 0.49 * Math.sin(time + pos[1] * TAU)
-                        ];
-                        
-                        // cell 중심의 shader 좌표 = iuv + pos + off
-                        // 여기서 iuv는 floor(uv)이고, off는 offset (-1, 0, 1)입니다
-                        // 실제로는: cell 중심 = (iuv + off) + pos = cellIuv + pos
-                        // 하지만 shader를 보면 dir = pos+off-fuv이므로
-                        // cell 중심 = iuv + pos + off입니다
-                        const cellCenterShaderX = iuvX + animatedPos[0] + offX;
-                        const cellCenterShaderY = iuvY + animatedPos[1] + offY;
-                        
-                        // 화면 좌표로 변환
-                        const normalizedX = cellCenterShaderX / scale;
-                        const normalizedY = cellCenterShaderY / scale;
-                        
-                        // 중앙 영역에 있는지 확인
-                        const distFromCenter = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
-                        if (distFromCenter <= centerRadius) {
-                            const centerX = (normalizedX / aspectRatio + 0.5) * p.width;
-                            const centerY = (normalizedY + 0.5) * p.height;
-                            
-                            // cell 식별자로 중복 제거 (iuv + off)
-                            const cellKey = `${cellIuvX},${cellIuvY}`;
-                            if (!cellMap.has(cellKey)) {
-                                cellMap.set(cellKey, {
-                                    centerX: centerX,
-                                    centerY: centerY
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Map에서 배열로 변환하고 거리순으로 정렬
-        const cellsArray = Array.from(cellMap.values());
-        cellsArray.sort((a, b) => {
-            const distA = Math.sqrt(Math.pow(a.centerX - p.width/2, 2) + Math.pow(a.centerY - p.height/2, 2));
-            const distB = Math.sqrt(Math.pow(b.centerX - p.width/2, 2) + Math.pow(b.centerY - p.height/2, 2));
-            return distA - distB;
-        });
-        
-        // 가까운 30개 cell에만 text 그리기
-        const numCells = Math.min(30, cellsArray.length);
-        for (let i = 0; i < numCells; i++) {
+        // 각 cell의 중심점에 텍스트 그리기
+        for (let i = 0; i < cellsArray.length; i++) {
             const cell = cellsArray[i];
             OverlayCanvas.fill(0);
             OverlayCanvas.textSize(textSize);
-            // point의 오른쪽에 text 배치
-            OverlayCanvas.text(text, cell.centerX + 5, cell.centerY + textSize * 0.35);
+            // Point의 정확한 위치에 텍스트 배치
+            OverlayCanvas.text(text, cell.centerX, cell.centerY);
         }
         
         p.image(OverlayCanvas, 0, 0);

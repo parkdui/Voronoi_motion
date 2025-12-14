@@ -2466,6 +2466,45 @@ class VoronoiPattern {
     }
 }
 
+// UI 패널 토글 기능 (전역)
+function toggleUIPanel() {
+    const controlPanel = document.getElementById('controlPanel');
+    if (controlPanel) {
+        const isHidden = controlPanel.style.opacity === '0' || controlPanel.style.display === 'none';
+        
+        if (isHidden) {
+            // 보이기
+            controlPanel.style.display = 'block';
+            // 약간의 지연 후 opacity를 1로 설정하여 부드러운 전환
+            setTimeout(() => {
+                controlPanel.style.opacity = '1';
+                controlPanel.style.transform = 'translateY(-50%)';
+            }, 10);
+        } else {
+            // 숨기기
+            controlPanel.style.opacity = '0';
+            controlPanel.style.transform = 'translateY(-50%) translateX(-20px)';
+            // 전환 완료 후 display를 none으로 설정
+            setTimeout(() => {
+                controlPanel.style.display = 'none';
+            }, 300);
+        }
+    }
+}
+
+// 키보드 단축키 설정
+document.addEventListener('keydown', (e) => {
+    // 'H' 키로 UI 패널 토글 (대소문자 구분 없음)
+    if (e.key === 'h' || e.key === 'H') {
+        // 입력 필드에 포커스가 있을 때는 무시
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+            return;
+        }
+        e.preventDefault();
+        toggleUIPanel();
+    }
+});
+
 // 페이지 로드 시 시작
 window.addEventListener('load', () => {
     try {
@@ -2485,6 +2524,9 @@ window.addEventListener('load', () => {
         console.log('Initializing VoronoiPattern...');
         window.voronoiPatternInstance = new VoronoiPattern('voronoiCanvas');
         console.log('VoronoiPattern initialized successfully');
+        
+        // 단축키 안내
+        console.log('단축키: H - UI 패널 토글');
     } catch (error) {
         console.error('Error initializing VoronoiPattern:', error);
         console.error('Stack trace:', error.stack);

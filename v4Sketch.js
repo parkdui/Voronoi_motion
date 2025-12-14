@@ -560,6 +560,19 @@ function setupV4Controls() {
     try {
         v4Pane.addInput(v4PARAMS, 'Recording', {
             label: 'Recording (Press R)',
+        }).on('change', (ev) => {
+            // UI 토글도 동기화
+            const recordingToggle = document.getElementById('recordingToggle');
+            if (recordingToggle) {
+                recordingToggle.checked = ev.value;
+                // VoronoiPattern 인스턴스의 녹화 상태도 업데이트
+                if (window.voronoiPatternInstance) {
+                    window.voronoiPatternInstance.isRecording = ev.value;
+                    if (ev.value) {
+                        window.voronoiPatternInstance.frameCount = 0;
+                    }
+                }
+            }
         });
     } catch (e) {
         console.warn('Error adding Recording to Tweakpane:', e);

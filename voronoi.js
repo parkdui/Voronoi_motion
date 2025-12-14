@@ -26,7 +26,7 @@ class VoronoiPattern {
         this.currentVersion = null; // 현재 활성화된 버전
         
         // 애니메이션 상태 관리
-        this.animationState = 'cciDGrid'; // 'cciDGrid', 'toCreative', 'voronoi', 'toGrid', 'gridDeform', 'gridDynamic', 'toVoronoi'
+        this.animationState = 'cciDGrid'; // 'cciDGrid', 'toCreative', 'voronoi', 'toGrid', 'gridDeform', 'gridDynamic', 'toVoronoi', 'textFadeOut'
         this.animationTime = 0;
         this.stateStartTime = 0;
         this.stateDuration = 3000; // 3초 (기본)
@@ -43,8 +43,13 @@ class VoronoiPattern {
         
         // 텍스트 애니메이션 관리 (모드 기반)
         this.textRevealProgress = 0; // 텍스트가 점진적으로 나타나는 진행도
+        this.textFadeOutProgress = 0; // 텍스트가 사라지는 진행도
         this.currentModeText = 'cciD'; // 현재 모드의 텍스트 (초기값: cciDGrid 모드)
         this.lastLogTime = null; // 디버깅용
+        
+        // 녹화 관련 변수
+        this.isRecording = false; // 녹화 상태
+        this.frameCount = 0; // 저장된 프레임 카운터
         
         this.resize();
         window.addEventListener('resize', () => this.resize());
@@ -122,7 +127,7 @@ class VoronoiPattern {
         
         // 초기 목표 위치 설정 (cciDGrid 상태가 아닐 때만)
         if (this.animationState !== 'cciDGrid') {
-            this.setNewTargets();
+        this.setNewTargets();
         }
         
         // Grid 위치 계산
@@ -231,10 +236,63 @@ class VoronoiPattern {
         // Version 버튼 설정
         this.setupVersionButtons();
         
+        // 녹화 토글 설정
+        this.setupRecordingToggle();
+        
         // 초기 v1 설정 저장 (v1이 없을 때만 현재 기본값으로 저장)
         if (!this.versions.v1) {
             this.saveVersion('v1');
             this.updateActiveButton('v1');
+        }
+    }
+    
+    // 녹화 토글 설정
+    setupRecordingToggle() {
+        const recordingToggle = document.getElementById('recordingToggle');
+        if (recordingToggle) {
+            recordingToggle.addEventListener('change', (e) => {
+                this.isRecording = e.target.checked;
+                if (this.isRecording) {
+                    this.frameCount = 0;
+                    console.log('녹화 시작! 파일은 브라우저의 다운로드 폴더에 저장됩니다.');
+                    console.log('파일명 형식: frame-0000.png, frame-0001.png, ...');
+                } else {
+                    if (this.frameCount > 0) {
+                        console.log(`녹화 완료! 총 ${this.frameCount}개 프레임이 저장되었습니다.`);
+                        console.log('파일 위치: 브라우저의 다운로드 폴더 (보통 ~/Downloads/)');
+                    }
+                    this.frameCount = 0;
+                }
+                
+                // v3-v6의 p5.js 기반 녹화도 동기화
+                this.syncP5Recording();
+            });
+        }
+    }
+    
+    // p5.js 기반 버전들의 녹화 상태 동기화
+    syncP5Recording() {
+        // v3 녹화 동기화
+        if (typeof v3PARAMS !== 'undefined' && v3PARAMS) {
+            v3PARAMS.Recording = this.isRecording;
+        }
+        // v4 녹화 동기화
+        if (typeof v4PARAMS !== 'undefined' && v4PARAMS) {
+            v4PARAMS.Recording = this.isRecording;
+        }
+        // v5 녹화 동기화
+        if (typeof v5PARAMS !== 'undefined' && v5PARAMS) {
+            v5PARAMS.Recording = this.isRecording;
+        }
+        // v6 녹화 동기화
+        if (typeof v6PARAMS !== 'undefined' && v6PARAMS) {
+            v6PARAMS.Recording = this.isRecording;
+        }
+        
+        // UI 토글도 동기화
+        const recordingToggle = document.getElementById('recordingToggle');
+        if (recordingToggle) {
+            recordingToggle.checked = this.isRecording;
         }
     }
     
@@ -263,6 +321,7 @@ class VoronoiPattern {
         const v4Button = document.getElementById('v4Button');
         const v5Button = document.getElementById('v5Button');
         const v6Button = document.getElementById('v6Button');
+        const v7Button = document.getElementById('v7Button');
         
         // v1 버튼: 저장된 설정 로드
         v1Button.addEventListener('click', () => {
@@ -302,6 +361,13 @@ class VoronoiPattern {
             });
         }
         
+        // v7 버튼: v1 복제, dots 제거, 'cciD' 텍스트만
+        if (v7Button) {
+            v7Button.addEventListener('click', () => {
+                this.switchToVersion('v7');
+            });
+        }
+        
         // 초기 활성 버튼 설정 (v1이 저장되어 있으면 v1 활성화)
         if (this.versions.v1) {
             this.updateActiveButton('v1');
@@ -322,6 +388,35 @@ class VoronoiPattern {
         } else if (version === 'v6') {
             // v6로 전환: p5.js 사용
             this.switchToV6();
+        } else if (version === 'v7') {
+            // v7로 전환: 기존 canvas 사용 (v1 복제, dots 제거, 'cciD'만)
+            this.switchFromP5();
+            
+            // v7은 cell 개수를 64로 설정
+            this.numPoints = 64;
+            
+            if (this.versions.v1) {
+                this.loadVersion('v1');
+                // v7은 cell 개수를 64로 강제 설정
+                this.numPoints = 64;
+            } else {
+                // v1이 없으면 현재 설정을 v1으로 저장 후 로드
+                this.saveVersion('v1');
+            }
+            
+            // v7 전용 초기화
+            this.currentVersion = 'v7';
+            this.numPoints = 64; // v7은 항상 64개
+            this.init(); // 포인트 재초기화
+            this.updateActiveButton('v7');
+            
+            // UI 업데이트
+            const cellCountSlider = document.getElementById('cellCount');
+            const cellCountValue = document.getElementById('cellCountValue');
+            if (cellCountSlider && cellCountValue) {
+                cellCountSlider.value = 64;
+                cellCountValue.textContent = 64;
+            }
         } else {
             // v1 또는 v2로 전환: 기존 canvas 사용
             this.switchFromP5();
@@ -817,6 +912,7 @@ class VoronoiPattern {
         const v4Button = document.getElementById('v4Button');
         const v5Button = document.getElementById('v5Button');
         const v6Button = document.getElementById('v6Button');
+        const v7Button = document.getElementById('v7Button');
         
         // 모든 버튼에서 active 클래스 제거
         if (v1Button) v1Button.classList.remove('active');
@@ -825,6 +921,7 @@ class VoronoiPattern {
         if (v4Button) v4Button.classList.remove('active');
         if (v5Button) v5Button.classList.remove('active');
         if (v6Button) v6Button.classList.remove('active');
+        if (v7Button) v7Button.classList.remove('active');
         
         // 선택된 버튼에 active 클래스 추가
         if (version === 'v1' && v1Button) {
@@ -839,6 +936,8 @@ class VoronoiPattern {
             v5Button.classList.add('active');
         } else if (version === 'v6' && v6Button) {
             v6Button.classList.add('active');
+        } else if (version === 'v7' && v7Button) {
+            v7Button.classList.add('active');
         }
     }
     
@@ -855,6 +954,29 @@ class VoronoiPattern {
             case 'cciDGrid':
                 modeText = 'cciD';
                 modeDuration = this.stateDuration;
+                // 첫 등장 시 천천히 나타나도록
+                // v7일 때는 더 천천히 (전체 duration 동안 완성, 더 느린 속도)
+                const textRevealSpeed = this.currentVersion === 'v7' ? 0.7 : 1.25; // v7은 더 느리게 (0.7배)
+                const textRevealDuration = this.currentVersion === 'v7' ? 1.0 : 0.8; // v7은 전체 duration 사용
+                const progress = Math.min(1, Math.max(0, elapsed / modeDuration));
+                const textProgress = Math.min(1, progress / textRevealDuration);
+                this.textRevealProgress = Math.min(1, textProgress * textRevealSpeed);
+                break;
+            case 'toCreative':
+                // toCreative 상태에서는 이전 텍스트를 유지
+                modeText = this.currentModeText || 'cciD';
+                modeDuration = this.stateDuration;
+                // v7일 때는 텍스트를 완성된 상태로 유지
+                if (this.currentVersion === 'v7') {
+                    this.textRevealProgress = 1.0;
+                }
+                break;
+            case 'textFadeOut':
+                modeText = 'cciD';
+                modeDuration = this.stateDuration;
+                // 페이드아웃 진행도 계산
+                const fadeProgress = Math.min(1, Math.max(0, elapsed / modeDuration));
+                this.textFadeOutProgress = fadeProgress;
                 break;
             case 'voronoi':
                 modeText = 'creative';
@@ -882,16 +1004,18 @@ class VoronoiPattern {
             this.lastLogTime = null; // 로그 시간도 리셋
         }
         
-        // 텍스트가 점진적으로 나타나는 진행도 계산
-        // elapsed와 modeDuration 모두 밀리초 단위이므로 정상적으로 계산됨
-        const progress = Math.min(1, Math.max(0, elapsed / modeDuration));
-        
-        // 텍스트가 나타나는 속도를 빠르게 (전체 duration의 50% 동안 완성)
-        // 완성 후에는 1.0으로 유지하여 다음 모드 전환까지 텍스트 유지
-        const textRevealSpeed = 2.0; // 2배 속도로 나타남
-        const textRevealDuration = 0.5; // 전체 duration의 50% 동안 완성
-        const textProgress = Math.min(1, progress / textRevealDuration);
-        this.textRevealProgress = Math.min(1, textProgress * textRevealSpeed);
+        // 텍스트가 점진적으로 나타나는 진행도 계산 (cciDGrid와 textFadeOut은 위에서 처리)
+        if (this.animationState !== 'cciDGrid' && this.animationState !== 'textFadeOut') {
+            // elapsed와 modeDuration 모두 밀리초 단위이므로 정상적으로 계산됨
+            const progress = Math.min(1, Math.max(0, elapsed / modeDuration));
+            
+            // 텍스트가 나타나는 속도를 빠르게 (전체 duration의 50% 동안 완성)
+            // 완성 후에는 1.0으로 유지하여 다음 모드 전환까지 텍스트 유지
+            const textRevealSpeed = 2.0; // 2배 속도로 나타남
+            const textRevealDuration = 0.5; // 전체 duration의 50% 동안 완성
+            const textProgress = Math.min(1, progress / textRevealDuration);
+            this.textRevealProgress = Math.min(1, textProgress * textRevealSpeed);
+        }
         
         // 디버깅: 진행도가 증가하는지 확인 (매 0.1초마다 로그 출력)
         if (this.currentModeText && this.currentModeText.length > 1) {
@@ -920,10 +1044,359 @@ class VoronoiPattern {
     }
     
     // 현재 표시할 텍스트 가져오기
-    getCurrentText() {
+    getCurrentText(cellIndex = 0, cellX = 0, cellY = 0) {
         // v2일 때는 항상 'cciD' 반환
         if (this.currentVersion === 'v2') {
             return 'cciD';
+        }
+        
+        // v7일 때는 cciDGrid 상태에서 v1처럼 모든 셀이 동일하게 천천히 나타나도록
+        if (this.currentVersion === 'v7') {
+            // textFadeOut 상태일 때는 각 셀마다 다른 letter가 독립적으로 사라졌다가 나타나기를 반복
+            if (this.animationState === 'textFadeOut') {
+                // 현재 시간 기반으로 펄스 효과 생성
+                const currentTime = Date.now() / 1000; // 초 단위
+                
+                // 각 셀마다 완전히 고유한 해시 생성 (cellIndex를 명확하게 사용)
+                // cellIndex를 주요 요소로 사용하여 각 셀마다 확실히 다른 값 생성
+                const cellHash = this.hash(cellIndex * 10000 + cellX * 100 + cellY * 100);
+                const cycleHash = this.hash(cellIndex * 20000 + cellX * 200 + cellY * 200);
+                const timingHash = this.hash(cellIndex * 30000 + cellX * 300 + cellY * 300);
+                const patternHash = this.hash(cellIndex * 40000 + cellX * 400 + cellY * 400);
+                
+                // 각 셀마다 다른 페이드 패턴 결정 (어떤 letter가 사라질지)
+                // 0: 첫 번째 c가 사라짐, 1: 두 번째 c가 사라짐, 2: i가 사라짐, 3: D가 사라짐
+                // 4: 첫 번째 c와 i가 사라짐, 5: 두 번째 c와 D가 사라짐, 6: i와 D가 사라짐, 7: 첫 번째 c와 D가 사라짐
+                // 8: 두 번째 c와 i가 사라짐, 9: 첫 번째 c와 두 번째 c가 사라짐, 10: 모든 letter가 하나씩 사라짐
+                const fadePatternType = Math.floor(Math.abs(patternHash) * 1000) % 11;
+                
+                // 각 셀마다 완전히 다른 주기 (매우 다양하게: 0.8초 ~ 5.0초)
+                // 일부는 빠르게, 일부는 느리게 움직이도록
+                const cycleDuration = 0.8 + (Math.abs(cycleHash) * 4.2);
+                
+                // 각 셀마다 완전히 다른 시작 오프셋 (전체 주기의 0 ~ 200% 범위)
+                // 이렇게 하면 일부 셀은 이미 진행 중이고, 일부는 아직 시작하지 않음
+                const maxOffset = cycleDuration * 2.0; // 최대 2주기만큼 오프셋
+                const timeOffset = (Math.abs(timingHash) * maxOffset);
+                
+                // 현재 시간에서 오프셋을 빼고 주기로 나눈 나머지 (0~1)
+                let cycleProgress = ((currentTime - timeOffset) % cycleDuration) / cycleDuration;
+                if (cycleProgress < 0) cycleProgress += 1; // 음수 보정
+                
+                // 각 셀마다 다른 페이드 타이밍 (언제 사라지고 나타날지)
+                // 페이드 시작 위치를 더 다양하게 (0.0 ~ 0.7)
+                const fadeStart = Math.abs(timingHash) * 0.7;
+                // 페이드 지속 시간도 다양하게 (0.15 ~ 0.4)
+                const fadeDuration = 0.15 + (Math.abs(cycleHash) * 0.25);
+                const fadeEnd = Math.min(1.0, fadeStart + fadeDuration);
+                
+                // 나타나는 시작 위치도 다양하게 (페이드 끝 이후 ~ 주기 끝까지)
+                const appearStartGap = 0.05 + (Math.abs(cellHash) * 0.2); // 0.05 ~ 0.25
+                const appearStart = Math.min(1.0, fadeEnd + appearStartGap);
+                // 나타나는 지속 시간도 다양하게 (0.1 ~ 0.3)
+                const appearDuration = 0.1 + (Math.abs(patternHash) * 0.2);
+                const appearEnd = Math.min(1.0, appearStart + appearDuration);
+                
+                // 페이드 패턴에 따라 텍스트 결정
+                let fadeText = 'cciD';
+                
+                if (cycleProgress >= fadeStart && cycleProgress < fadeEnd) {
+                    // 페이드 구간: letter가 사라짐
+                    const fadeProgress = (cycleProgress - fadeStart) / (fadeEnd - fadeStart); // 0~1
+                    
+                    switch (fadePatternType) {
+                        case 0: // 첫 번째 c가 사라짐: cciD -> ciD -> iD -> D -> (빈)
+                            if (fadeProgress < 0.25) fadeText = 'ciD';
+                            else if (fadeProgress < 0.5) fadeText = 'iD';
+                            else if (fadeProgress < 0.75) fadeText = 'D';
+                            else fadeText = '';
+                            break;
+                        case 1: // 두 번째 c가 사라짐: cciD -> ciD -> iD -> D -> (빈)
+                            if (fadeProgress < 0.25) fadeText = 'ciD';
+                            else if (fadeProgress < 0.5) fadeText = 'iD';
+                            else if (fadeProgress < 0.75) fadeText = 'D';
+                            else fadeText = '';
+                            break;
+                        case 2: // i가 사라짐: cciD -> ccD -> cD -> D -> (빈)
+                            if (fadeProgress < 0.25) fadeText = 'ccD';
+                            else if (fadeProgress < 0.5) fadeText = 'cD';
+                            else if (fadeProgress < 0.75) fadeText = 'D';
+                            else fadeText = '';
+                            break;
+                        case 3: // D가 사라짐: cciD -> cci -> cc -> c -> (빈)
+                            if (fadeProgress < 0.25) fadeText = 'cci';
+                            else if (fadeProgress < 0.5) fadeText = 'cc';
+                            else if (fadeProgress < 0.75) fadeText = 'c';
+                            else fadeText = '';
+                            break;
+                        case 4: // 첫 번째 c와 i가 사라짐: cciD -> cD -> D -> (빈)
+                            if (fadeProgress < 0.33) fadeText = 'cD';
+                            else if (fadeProgress < 0.66) fadeText = 'D';
+                            else fadeText = '';
+                            break;
+                        case 5: // 두 번째 c와 D가 사라짐: cciD -> ci -> i -> (빈)
+                            if (fadeProgress < 0.33) fadeText = 'ci';
+                            else if (fadeProgress < 0.66) fadeText = 'i';
+                            else fadeText = '';
+                            break;
+                        case 6: // i와 D가 사라짐: cciD -> cc -> c -> (빈)
+                            if (fadeProgress < 0.33) fadeText = 'cc';
+                            else if (fadeProgress < 0.66) fadeText = 'c';
+                            else fadeText = '';
+                            break;
+                        case 7: // 첫 번째 c와 D가 사라짐: cciD -> ci -> i -> (빈)
+                            if (fadeProgress < 0.33) fadeText = 'ci';
+                            else if (fadeProgress < 0.66) fadeText = 'i';
+                            else fadeText = '';
+                            break;
+                        case 8: // 두 번째 c와 i가 사라짐: cciD -> cD -> D -> (빈)
+                            if (fadeProgress < 0.33) fadeText = 'cD';
+                            else if (fadeProgress < 0.66) fadeText = 'D';
+                            else fadeText = '';
+                            break;
+                        case 9: // 첫 번째 c와 두 번째 c가 사라짐: cciD -> iD -> D -> (빈)
+                            if (fadeProgress < 0.33) fadeText = 'iD';
+                            else if (fadeProgress < 0.66) fadeText = 'D';
+                            else fadeText = '';
+                            break;
+                        case 10: // 모든 letter가 하나씩 사라짐: cciD -> cci -> ci -> c -> (빈) -> i -> ci -> cci -> cciD
+                            if (fadeProgress < 0.2) fadeText = 'cci';
+                            else if (fadeProgress < 0.4) fadeText = 'ci';
+                            else if (fadeProgress < 0.6) fadeText = 'c';
+                            else if (fadeProgress < 0.8) fadeText = '';
+                            else fadeText = 'i';
+                            break;
+                    }
+                } else if (cycleProgress >= appearStart && cycleProgress < appearEnd) {
+                    // 나타나는 구간: letter가 다시 나타남 (역순)
+                    const appearProgress = (cycleProgress - appearStart) / (appearEnd - appearStart); // 0~1
+                    
+                    switch (fadePatternType) {
+                        case 0: // 첫 번째 c가 다시 나타남: (빈) -> D -> iD -> ciD -> cciD
+                            if (appearProgress < 0.25) fadeText = 'D';
+                            else if (appearProgress < 0.5) fadeText = 'iD';
+                            else if (appearProgress < 0.75) fadeText = 'ciD';
+                            else fadeText = 'cciD';
+                            break;
+                        case 1: // 두 번째 c가 다시 나타남: (빈) -> D -> iD -> ciD -> cciD
+                            if (appearProgress < 0.25) fadeText = 'D';
+                            else if (appearProgress < 0.5) fadeText = 'iD';
+                            else if (appearProgress < 0.75) fadeText = 'ciD';
+                            else fadeText = 'cciD';
+                            break;
+                        case 2: // i가 다시 나타남: (빈) -> D -> cD -> ccD -> cciD
+                            if (appearProgress < 0.25) fadeText = 'D';
+                            else if (appearProgress < 0.5) fadeText = 'cD';
+                            else if (appearProgress < 0.75) fadeText = 'ccD';
+                            else fadeText = 'cciD';
+                            break;
+                        case 3: // D가 다시 나타남: (빈) -> c -> cc -> cci -> cciD
+                            if (appearProgress < 0.25) fadeText = 'c';
+                            else if (appearProgress < 0.5) fadeText = 'cc';
+                            else if (appearProgress < 0.75) fadeText = 'cci';
+                            else fadeText = 'cciD';
+                            break;
+                        case 4: // 첫 번째 c와 i가 다시 나타남: (빈) -> D -> cD -> cciD
+                            if (appearProgress < 0.33) fadeText = 'D';
+                            else if (appearProgress < 0.66) fadeText = 'cD';
+                            else fadeText = 'cciD';
+                            break;
+                        case 5: // 두 번째 c와 D가 다시 나타남: (빈) -> i -> ci -> cciD
+                            if (appearProgress < 0.33) fadeText = 'i';
+                            else if (appearProgress < 0.66) fadeText = 'ci';
+                            else fadeText = 'cciD';
+                            break;
+                        case 6: // i와 D가 다시 나타남: (빈) -> c -> cc -> cciD
+                            if (appearProgress < 0.33) fadeText = 'c';
+                            else if (appearProgress < 0.66) fadeText = 'cc';
+                            else fadeText = 'cciD';
+                            break;
+                        case 7: // 첫 번째 c와 D가 다시 나타남: (빈) -> i -> ci -> cciD
+                            if (appearProgress < 0.33) fadeText = 'i';
+                            else if (appearProgress < 0.66) fadeText = 'ci';
+                            else fadeText = 'cciD';
+                            break;
+                        case 8: // 두 번째 c와 i가 다시 나타남: (빈) -> D -> cD -> cciD
+                            if (appearProgress < 0.33) fadeText = 'D';
+                            else if (appearProgress < 0.66) fadeText = 'cD';
+                            else fadeText = 'cciD';
+                            break;
+                        case 9: // 첫 번째 c와 두 번째 c가 다시 나타남: (빈) -> D -> iD -> cciD
+                            if (appearProgress < 0.33) fadeText = 'D';
+                            else if (appearProgress < 0.66) fadeText = 'iD';
+                            else fadeText = 'cciD';
+                            break;
+                        case 10: // 모든 letter가 하나씩 다시 나타남: (빈) -> i -> ci -> cci -> cciD
+                            if (appearProgress < 0.25) fadeText = 'i';
+                            else if (appearProgress < 0.5) fadeText = 'ci';
+                            else if (appearProgress < 0.75) fadeText = 'cci';
+                            else fadeText = 'cciD';
+                            break;
+                    }
+                }
+                // 나머지 구간에서는 'cciD' 유지
+                
+                return fadeText;
+            }
+            
+            if (this.animationState === 'cciDGrid' || this.animationState === 'toCreative') {
+                // toCreative 상태일 때는 textRevealProgress를 1.0으로 유지하여 완성된 텍스트 표시
+                let currentRevealProgress = this.textRevealProgress;
+                if (this.animationState === 'toCreative') {
+                    // toCreative 상태에서는 완성된 텍스트를 유지
+                    currentRevealProgress = 1.0;
+                }
+                
+                // 모든 셀이 동일한 속도로 나타나도록 (v1처럼)
+                let cellProgress = Math.min(1, currentRevealProgress);
+                
+                // ease-in-out 함수를 적용하여 더 자연스러운 타이핑 효과
+                // 처음과 끝이 더 천천히, 중간이 빠르게
+                cellProgress = cellProgress < 0.5 
+                    ? 2 * cellProgress * cellProgress 
+                    : -1 + (4 - 2 * cellProgress) * cellProgress;
+                
+                // 각 글자 구간의 비율 조정 (초반 타이핑 구간을 더 길게)
+                // c: 0 ~ 0.4 (40%), cc: 0.4 ~ 0.65 (25%), cci: 0.65 ~ 0.85 (20%), cciD: 0.85 ~ 1.0 (15%)
+                if (cellProgress < 0.4) {
+                    return 'c';
+                } else if (cellProgress < 0.65) {
+                    return 'cc';
+                } else if (cellProgress < 0.85) {
+                    return 'cci';
+                } else {
+                    return 'cciD';
+                }
+            } else {
+                // 그 외 상태에서는 항상 'cciD' 반환
+                return 'cciD';
+            }
+        }
+        
+        // textFadeOut 상태일 때 텍스트가 다양한 패턴으로 사라지도록
+        if (this.animationState === 'textFadeOut' && this.currentModeText === 'cciD') {
+            // 페이드아웃 진행도에 따라 텍스트가 사라짐
+            // 각 셀마다 다른 속도와 패턴으로 사라지도록
+            const fadeProgress = this.textFadeOutProgress;
+            
+            // 셀 위치를 기반으로 해시 생성하여 패턴 결정
+            const hash = this.hash(cellX * 1000 + cellY * 1000 + cellIndex);
+            const patternIndex = Math.floor(Math.abs(hash) * 20) % 20; // 20가지 패턴
+            
+            // 각 패턴의 페이드아웃 타이밍 (0~1 범위)
+            // 패턴마다 다른 속도로 사라지도록
+            let fadeThresholds;
+            let fadeTexts;
+            
+            switch (patternIndex) {
+                case 0: // cciD -> cci -> ci -> c
+                    fadeThresholds = [0.15, 0.35, 0.55, 0.75];
+                    fadeTexts = ['cci', 'ci', 'c', ''];
+                    break;
+                case 1: // cciD -> cid -> id -> d
+                    fadeThresholds = [0.2, 0.4, 0.6, 0.8];
+                    fadeTexts = ['cid', 'id', 'd', ''];
+                    break;
+                case 2: // cciD -> cci -> cc -> c
+                    fadeThresholds = [0.1, 0.3, 0.5, 0.7];
+                    fadeTexts = ['cci', 'cc', 'c', ''];
+                    break;
+                case 3: // cciD -> cid -> id
+                    fadeThresholds = [0.25, 0.5, 0.75];
+                    fadeTexts = ['cid', 'id', ''];
+                    break;
+                case 4: // cciD -> cci -> ci
+                    fadeThresholds = [0.3, 0.6, 0.9];
+                    fadeTexts = ['cci', 'ci', ''];
+                    break;
+                case 5: // cciD -> cid -> d
+                    fadeThresholds = [0.2, 0.5, 0.8];
+                    fadeTexts = ['cid', 'd', ''];
+                    break;
+                case 6: // cciD -> c -> (빈 문자열)
+                    fadeThresholds = [0.4, 0.7];
+                    fadeTexts = ['c', ''];
+                    break;
+                case 7: // cciD -> iD -> (빈 문자열)
+                    fadeThresholds = [0.3, 0.65];
+                    fadeTexts = ['iD', ''];
+                    break;
+                case 8: // cciD -> cc -> (빈 문자열)
+                    fadeThresholds = [0.35, 0.7];
+                    fadeTexts = ['cc', ''];
+                    break;
+                case 9: // cciD -> ci -> (빈 문자열)
+                    fadeThresholds = [0.3, 0.65];
+                    fadeTexts = ['ci', ''];
+                    break;
+                case 10: // cciD -> id -> (빈 문자열)
+                    fadeThresholds = [0.25, 0.6];
+                    fadeTexts = ['id', ''];
+                    break;
+                case 11: // cciD -> D -> (빈 문자열)
+                    fadeThresholds = [0.4, 0.75];
+                    fadeTexts = ['D', ''];
+                    break;
+                case 12: // cciD -> cci -> c -> (빈 문자열)
+                    fadeThresholds = [0.2, 0.45, 0.7];
+                    fadeTexts = ['cci', 'c', ''];
+                    break;
+                case 13: // cciD -> cid -> iD -> (빈 문자열)
+                    fadeThresholds = [0.25, 0.5, 0.75];
+                    fadeTexts = ['cid', 'iD', ''];
+                    break;
+                case 14: // cciD -> cc -> c -> (빈 문자열)
+                    fadeThresholds = [0.3, 0.55, 0.8];
+                    fadeTexts = ['cc', 'c', ''];
+                    break;
+                case 15: // cciD -> ci -> i -> (빈 문자열)
+                    fadeThresholds = [0.25, 0.5, 0.75];
+                    fadeTexts = ['ci', 'i', ''];
+                    break;
+                case 16: // cciD -> id -> d -> (빈 문자열)
+                    fadeThresholds = [0.3, 0.6, 0.85];
+                    fadeTexts = ['id', 'd', ''];
+                    break;
+                case 17: // cciD -> cD -> D -> (빈 문자열)
+                    fadeThresholds = [0.2, 0.45, 0.7];
+                    fadeTexts = ['cD', 'D', ''];
+                    break;
+                case 18: // cciD -> ciD -> iD -> (빈 문자열)
+                    fadeThresholds = [0.25, 0.5, 0.75];
+                    fadeTexts = ['ciD', 'iD', ''];
+                    break;
+                case 19: // cciD -> ccD -> cD -> (빈 문자열)
+                    fadeThresholds = [0.2, 0.45, 0.7];
+                    fadeTexts = ['ccD', 'cD', ''];
+                    break;
+            }
+            
+            if (fadeProgress < fadeThresholds[0]) {
+                return 'cciD';
+            }
+            for (let i = 0; i < fadeThresholds.length; i++) {
+                if (fadeProgress < fadeThresholds[i]) {
+                    return fadeTexts[i - 1] || '';
+                }
+            }
+            return fadeTexts[fadeTexts.length - 1] || '';
+        }
+        
+        // cciDGrid 상태일 때 천천히 나타나도록 (c -> cc -> cci -> ccid)
+        if (this.animationState === 'cciDGrid' && this.currentModeText === 'cciD') {
+            const progress = this.textRevealProgress;
+            
+            // 각 글자가 나타나는 타이밍
+            // c: 0~0.25, cc: 0.25~0.5, cci: 0.5~0.75, ccid: 0.75~1
+            if (progress < 0.25) {
+                return 'c';
+            } else if (progress < 0.5) {
+                return 'cc';
+            } else if (progress < 0.75) {
+                return 'cci';
+            } else {
+                return 'ccid';
+            }
         }
         
         if (!this.currentModeText) {
@@ -1209,6 +1682,9 @@ class VoronoiPattern {
             case 'toVoronoi':
                 this.updateToVoronoi(progress);
                 break;
+            case 'textFadeOut':
+                this.updateTextFadeOut(progress);
+                break;
         }
     }
     
@@ -1218,10 +1694,15 @@ class VoronoiPattern {
         switch (this.animationState) {
             case 'cciDGrid':
                 // cciD Grid -> creative Voronoi로 전환
+                // 현재 포인트 위치를 저장 (smooth 전환을 위해)
                 this.cciDGridEndPoints = this.points.map(p => [p[0], p[1]]);
                 this.animationState = 'toCreative';
                 // Voronoi target 위치 설정
                 this.setNewTargets();
+                // v7일 때는 텍스트를 완성된 상태로 유지
+                if (this.currentVersion === 'v7') {
+                    this.textRevealProgress = 1.0;
+                }
                 break;
             case 'toCreative':
                 // creative Voronoi 도달
@@ -1254,7 +1735,12 @@ class VoronoiPattern {
                 this.setNewTargets();
                 break;
             case 'toVoronoi':
-                // Voronoi 복귀 완료 -> 다시 cciD Grid 모드
+                // Voronoi 복귀 완료 -> 텍스트 페이드아웃 시작
+                this.animationState = 'textFadeOut';
+                this.textFadeOutProgress = 0;
+                break;
+            case 'textFadeOut':
+                // 텍스트 페이드아웃 완료 -> 다시 cciD Grid 모드
                 this.animationState = 'cciDGrid';
                 // cciD Grid 위치로 초기화
                 this.calculateCciDGridPositions();
@@ -1264,6 +1750,10 @@ class VoronoiPattern {
                         this.points[i][1] = this.cciDGridPositions[i][1];
                     }
                 }
+                // 텍스트 초기화
+                this.textRevealProgress = 0;
+                this.textFadeOutProgress = 0;
+                this.currentModeText = 'cciD';
                 break;
         }
     }
@@ -1657,6 +2147,32 @@ class VoronoiPattern {
         }
     }
     
+    updateTextFadeOut(progress) {
+        // 텍스트가 사라지는 동안 격자 위치로 이동
+        // Ease-in-out으로 부드러운 전환
+        const easedProgress = this.easeInOut(progress);
+        
+        // cciD Grid 위치 계산 (아직 계산되지 않았다면)
+        if (this.cciDGridPositions.length === 0) {
+            this.calculateCciDGridPositions();
+        }
+        
+        // 현재 위치에서 cciD Grid 위치로 이동
+        // 시작 위치는 현재 points 위치 (toVoronoi에서 이미 targetPoints로 이동했을 수 있음)
+        for (let i = 0; i < this.points.length; i++) {
+            if (i < this.cciDGridPositions.length) {
+                // 시작 위치는 현재 points 위치
+                const startX = this.points[i][0];
+                const startY = this.points[i][1];
+                const endX = this.cciDGridPositions[i][0];
+                const endY = this.cciDGridPositions[i][1];
+                
+                this.points[i][0] = startX + (endX - startX) * easedProgress;
+                this.points[i][1] = startY + (endY - startY) * easedProgress;
+            }
+        }
+    }
+    
     draw() {
         try {
             // 고품질 렌더링 설정
@@ -1672,15 +2188,15 @@ class VoronoiPattern {
             
             // 캔버스 클리어 (v2일 때는 #794CD4, 그 외는 #ffffff)
             this.ctx.fillStyle = this.currentVersion === 'v2' ? '#794CD4' : '#ffffff';
-            this.ctx.fillRect(0, 0, this.width, this.height);
-            
+        this.ctx.fillRect(0, 0, this.width, this.height);
+        
             // Ellipse 영역 설정 (화면 중앙에 위치)
-            const centerX = this.width / 2;
-            const centerY = this.height / 2;
-            const ellipseWidth = this.height * 0.8; // 화면 너비의 80%
-            const ellipseHeight = this.height * 0.8; // 화면 높이의 60%
-            
-            // Delaunay 삼각분할 생성
+        const centerX = this.width / 2;
+        const centerY = this.height / 2;
+        const ellipseWidth = this.height * 0.8; // 화면 너비의 80%
+        const ellipseHeight = this.height * 0.8; // 화면 높이의 60%
+        
+        // Delaunay 삼각분할 생성
             if (!this.points || this.points.length === 0) {
                 return; // 포인트가 없으면 그리지 않음
             }
@@ -1690,8 +2206,8 @@ class VoronoiPattern {
                 return;
             }
             
-            const delaunay = d3.Delaunay.from(this.points);
-            const voronoi = delaunay.voronoi([0, 0, this.width, this.height]);
+        const delaunay = d3.Delaunay.from(this.points);
+        const voronoi = delaunay.voronoi([0, 0, this.width, this.height]);
         
         // Cell 면적 계산 및 저장
         this.cellAreas = [];
@@ -1738,7 +2254,7 @@ class VoronoiPattern {
                 // Stroke 설정 (visible일 때만)
                 if (this.strokeVisible) {
                     this.ctx.strokeStyle = this.strokeColor;
-                    this.ctx.lineWidth = 1.5;
+                this.ctx.lineWidth = 1.5;
                 } else {
                     this.ctx.strokeStyle = 'transparent';
                     this.ctx.lineWidth = 0;
@@ -1817,10 +2333,13 @@ class VoronoiPattern {
             // Dot 크기 - Perlin noise 기반 크기 사용
             const dotRadius = this.baseDotSize * sizeFactor;
             
+            // v7일 때는 dot을 그리지 않음
+            if (this.currentVersion !== 'v7') {
             // Dot 그리기
             this.ctx.beginPath();
             this.ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
             this.ctx.fill();
+            }
             
             // 텍스트 크기 - Perlin noise 기반 크기 사용
             const fontSize = this.baseTextSize * sizeFactor;
@@ -1828,9 +2347,18 @@ class VoronoiPattern {
             this.ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
             
             // 텍스트 위치 및 크기 계산
-            const textX = x + dotRadius + 3;
+            // v7일 때는 dot 없이 중심에 배치, 텍스트 정렬도 중앙으로
+            const textX = this.currentVersion === 'v7' ? x : x + dotRadius + 3;
             const textY = y;
-            const text = this.getCurrentText();
+            
+            // v7일 때 텍스트 정렬을 중앙으로 변경
+            if (this.currentVersion === 'v7') {
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+            }
+            
+            // 셀 인덱스와 위치를 전달하여 각 셀마다 다른 텍스트 표시
+            const text = this.getCurrentText(i, x, y);
             const textMetrics = this.ctx.measureText(text);
             const textWidth = textMetrics.width;
             const textHeight = fontSize;
@@ -1866,8 +2394,8 @@ class VoronoiPattern {
                             adjustedY += Math.sin(angle) * pushDistance * this.textRevealProgress;
                         } else {
                             // 텍스트가 완성된 후에는 겹치면 그리지 않음
-                            shouldDrawText = false;
-                            break;
+                        shouldDrawText = false;
+                        break;
                         }
                     }
                 }
@@ -1887,6 +2415,42 @@ class VoronoiPattern {
                         height: textHeight
                     });
                 }
+            }
+            
+            // v7일 때 텍스트 정렬을 다시 left로 복원 (다음 반복을 위해)
+            if (this.currentVersion === 'v7') {
+                this.ctx.textAlign = 'left';
+                this.ctx.textBaseline = 'middle';
+            }
+        }
+        
+        // 녹화 중이면 프레임 저장 (v1, v2, v7만 - v3-v6는 p5.js에서 처리)
+        if (this.isRecording && (this.currentVersion === 'v1' || this.currentVersion === 'v2' || this.currentVersion === 'v7' || !this.currentVersion)) {
+            // 프레임 번호를 4자리 숫자로 포맷팅
+            const frameNumber = String(this.frameCount).padStart(4, '0');
+            const filename = `frame-${frameNumber}.png`;
+            
+            // canvas를 이미지로 저장
+            try {
+                this.canvas.toBlob(function(blob) {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 'image/png');
+            } catch (error) {
+                console.error('프레임 저장 오류:', error);
+            }
+            
+            this.frameCount++;
+            
+            // 100프레임마다 진행 상황 출력
+            if (this.frameCount % 100 === 0) {
+                console.log(`${this.frameCount}개 프레임 저장됨`);
             }
         }
         } catch (error) {
@@ -1919,7 +2483,7 @@ window.addEventListener('load', () => {
         }
         
         console.log('Initializing VoronoiPattern...');
-        new VoronoiPattern('voronoiCanvas');
+        window.voronoiPatternInstance = new VoronoiPattern('voronoiCanvas');
         console.log('VoronoiPattern initialized successfully');
     } catch (error) {
         console.error('Error initializing VoronoiPattern:', error);

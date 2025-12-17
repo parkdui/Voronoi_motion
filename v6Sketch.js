@@ -34,7 +34,8 @@ let v6Sketch = function(p) {
     ];
     
     // Grid 크기 옵션: 80, 40, 20 (최대 80, 최소 20)
-    const GRID_SIZES = [80, 40, 20];
+    let GRID_SIZES = [80, 40, 20];
+    const INITIAL_GRID_SIZES = [80, 40, 20]; // 초기값 저장
     
     // 각 cell의 grid 크기를 저장하는 Map (cellIuv -> gridSize)
     let cellGridSizes = new Map();
@@ -755,7 +756,7 @@ let v6Sketch = function(p) {
         }
     };
     
-    // 키보드 입력 처리 (녹화 시작/중지)
+    // 키보드 입력 처리 (녹화 시작/중지, 그리드 크기 조절)
     p.keyPressed = function() {
         if (p.key === 'r' || p.key === 'R') {
             if (PARAMS) {
@@ -766,6 +767,16 @@ let v6Sketch = function(p) {
                     console.log('녹화 중지');
                 }
             }
+        } else if (p.key === '2') {
+            // 그리드 크기를 2배로 증가
+            GRID_SIZES = GRID_SIZES.map(size => size * 2);
+            cellGridSizes.clear(); // cell grid 크기 재할당을 위해 초기화
+            console.log('그리드 크기 2배 증가:', GRID_SIZES);
+        } else if (p.key === '1') {
+            // 그리드 크기 초기화
+            GRID_SIZES = [...INITIAL_GRID_SIZES];
+            cellGridSizes.clear(); // cell grid 크기 재할당을 위해 초기화
+            console.log('그리드 크기 초기화:', GRID_SIZES);
         }
     };
 };

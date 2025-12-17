@@ -397,6 +397,14 @@ class VoronoiPattern {
             });
         }
         
+        // v9 버튼: v8 복제 (초기, snake, zigzag만 무한 반복)
+        const v9Button = document.getElementById('v9Button');
+        if (v9Button) {
+            v9Button.addEventListener('click', () => {
+                this.switchToVersion('v9');
+            });
+        }
+        
         // 초기 활성 버튼 설정 (v1이 저장되어 있으면 v1 활성화)
         if (this.versions.v1) {
             this.updateActiveButton('v1');
@@ -475,6 +483,39 @@ class VoronoiPattern {
                 cellCountSlider.value = 64;
                 cellCountValue.textContent = 64;
             }
+        } else if (version === 'v9') {
+            // v9로 전환: v8 복제 (초기, snake, zigzag만 무한 반복)
+            this.switchFromP5();
+            
+            // v9는 cell 개수를 64로 설정
+            this.numPoints = 64;
+            
+            if (this.versions.v1) {
+                this.loadVersion('v1');
+                // v9는 cell 개수를 64로 강제 설정
+                this.numPoints = 64;
+            } else {
+                // v1이 없으면 현재 설정을 v1으로 저장 후 로드
+                this.saveVersion('v1');
+            }
+            
+            // v9 전용 초기화
+            this.currentVersion = 'v9';
+            this.numPoints = 64; // v9는 항상 64개
+            this.animationState = 'cciDGrid'; // v9는 cciDGrid 상태에서 시작
+            this.stateStartTime = Date.now(); // 상태 시작 시간 초기화
+            this.currentModeText = 'cciD';
+            this.textRevealProgress = 0;
+            this.init(); // 포인트 재초기화
+            this.updateActiveButton('v9');
+            
+            // UI 업데이트
+            const cellCountSlider = document.getElementById('cellCount');
+            const cellCountValue = document.getElementById('cellCountValue');
+            if (cellCountSlider && cellCountValue) {
+                cellCountSlider.value = 64;
+                cellCountValue.textContent = 64;
+            }
         } else {
             // v1 또는 v2로 전환: 기존 canvas 사용
             this.switchFromP5();
@@ -498,14 +539,15 @@ class VoronoiPattern {
             this.canvas.style.display = 'none';
         }
         
-        // 기존 컨트롤 숨기기 (v3 전용 컨트롤 제외)
+        // 기존 컨트롤 숨기기 (v3 전용 컨트롤 및 Font Color 제외)
         const controlGroups = document.querySelectorAll('#controlPanel > .control-group');
         controlGroups.forEach(group => {
             const isV3Control = group.id === 'v3DotSizeGroup' || group.id === 'v3TextSizeGroup';
-            if (!isV3Control) {
+            const isFontColorGroup = group.id === 'fontColorGroup';
+            if (!isV3Control && !isFontColorGroup) {
                 group.style.display = 'none';
             } else {
-                group.style.display = 'block'; // v3 전용 컨트롤은 표시
+                group.style.display = 'block';
             }
         });
         
@@ -564,10 +606,15 @@ class VoronoiPattern {
             this.canvas.style.display = 'none';
         }
         
-        // 기존 컨트롤 숨기기
+        // 기존 컨트롤 숨기기 (Font Color 제외)
         const controlGroups = document.querySelectorAll('#controlPanel > .control-group');
         controlGroups.forEach(group => {
-            group.style.display = 'none';
+            const isFontColorGroup = group.id === 'fontColorGroup';
+            if (!isFontColorGroup) {
+                group.style.display = 'none';
+            } else {
+                group.style.display = 'block';
+            }
         });
         
         // v3 Tweakpane 숨기기
@@ -633,11 +680,12 @@ class VoronoiPattern {
             this.canvas.style.display = 'none';
         }
         
-        // 기존 컨트롤 숨기기
+        // 기존 컨트롤 숨기기 (v5 전용 컨트롤 및 Font Color 제외)
         const controlGroups = document.querySelectorAll('#controlPanel > .control-group');
         controlGroups.forEach(group => {
             const isV5Control = group.id === 'v5DotSizeGroup' || group.id === 'v5TextSizeGroup';
-            if (!isV5Control) {
+            const isFontColorGroup = group.id === 'fontColorGroup';
+            if (!isV5Control && !isFontColorGroup) {
                 group.style.display = 'none';
             } else {
                 group.style.display = 'block';
@@ -699,10 +747,16 @@ class VoronoiPattern {
             this.canvas.style.display = 'none';
         }
         
-        // 기존 컨트롤 숨기기
+        // 기존 컨트롤 숨기기 (Font Color는 모든 버전에서 표시)
         const controlGroups = document.querySelectorAll('#controlPanel > .control-group');
         controlGroups.forEach(group => {
-            group.style.display = 'none';
+            // Font Color는 모든 버전에서 표시
+            const isFontColorGroup = group.id === 'fontColorGroup';
+            if (!isFontColorGroup) {
+                group.style.display = 'none';
+            } else {
+                group.style.display = 'block';
+            }
         });
         
         // v3 Tweakpane 숨기기
@@ -822,14 +876,15 @@ class VoronoiPattern {
             this.canvas.style.display = 'block';
         }
         
-        // 기존 컨트롤 보이기 (v3 전용 컨트롤 숨기기)
+        // 기존 컨트롤 보이기 (v3 전용 컨트롤 숨기기, Font Color는 항상 표시)
         const controlGroups = document.querySelectorAll('#controlPanel > .control-group');
         controlGroups.forEach(group => {
             const isV3Control = group.id === 'v3DotSizeGroup' || group.id === 'v3TextSizeGroup';
+            const isFontColorGroup = group.id === 'fontColorGroup';
             if (isV3Control) {
                 group.style.display = 'none';
             } else {
-                group.style.display = 'block';
+                group.style.display = 'block'; // Font Color 포함 모든 일반 컨트롤 표시
             }
         });
         
@@ -985,6 +1040,8 @@ class VoronoiPattern {
         if (v6Button) v6Button.classList.remove('active');
         if (v7Button) v7Button.classList.remove('active');
         if (v8Button) v8Button.classList.remove('active');
+        const v9Button = document.getElementById('v9Button');
+        if (v9Button) v9Button.classList.remove('active');
         
         // 선택된 버튼에 active 클래스 추가
         if (version === 'v1' && v1Button) {
@@ -1003,6 +1060,8 @@ class VoronoiPattern {
             v7Button.classList.add('active');
         } else if (version === 'v8' && v8Button) {
             v8Button.classList.add('active');
+        } else if (version === 'v9' && v9Button) {
+            v9Button.classList.add('active');
         }
     }
     
@@ -1018,13 +1077,19 @@ class VoronoiPattern {
         switch (this.animationState) {
             case 'cciDGrid':
                 modeText = 'cciD';
-                // v8일 때는 duration을 더 길게 (6초)
-                modeDuration = this.currentVersion === 'v8' ? 6000 : this.stateDuration;
+                // v8, v9일 때는 무한 반복을 위해 매우 큰 duration 설정
+                if (this.currentVersion === 'v8' || this.currentVersion === 'v9') {
+                    modeDuration = 999999999; // 무한 반복을 위한 매우 큰 값
+                } else {
+                    modeDuration = this.stateDuration;
+                }
                 // 첫 등장 시 천천히 나타나도록
-                if (this.currentVersion === 'v8') {
-                    // v8은 전체 duration 동안 완성되도록 (1.0 이상으로 설정)
-                    const progress = Math.min(1, Math.max(0, elapsed / modeDuration));
-                    this.textRevealProgress = progress; // 0 ~ 1까지 직접 매핑
+                if (this.currentVersion === 'v8' || this.currentVersion === 'v9') {
+                    // v8, v9는 무한 반복이므로 progress를 계산하지 않음 (getCurrentText에서 직접 처리)
+                    this.textRevealProgress = 0; // 사용하지 않음
+                } else if (this.currentVersion === 'v7') {
+                    // v9는 무한 반복이므로 progress를 계산하지 않음 (getCurrentText에서 직접 처리)
+                    this.textRevealProgress = 0; // 사용하지 않음
                 } else if (this.currentVersion === 'v7') {
                     // v7일 때는 더 천천히 (전체 duration 동안 완성, 더 느린 속도)
                     const textRevealSpeed = 0.7;
@@ -1105,6 +1170,9 @@ class VoronoiPattern {
                 this.lastLogTime = currentLogTime;
                 const targetLength = this.currentModeText.length;
                 const calculatedLength = Math.ceil(1 + (targetLength - 1) * this.textRevealProgress);
+                const progress = this.animationState === 'cciDGrid' && (this.currentVersion === 'v8' || this.currentVersion === 'v9') 
+                    ? Math.min(1, Math.max(0, elapsed / modeDuration))
+                    : (elapsed / modeDuration);
                 console.log('Text reveal:', {
                     mode: this.animationState,
                     modeText: this.currentModeText,
@@ -1319,7 +1387,8 @@ class VoronoiPattern {
             
             if (this.animationState === 'cciDGrid' || this.animationState === 'toCreative') {
                 // v8일 때는 초기 애니메이션: c, i, d가 번갈아가며 나타남
-                if (this.currentVersion === 'v8') {
+                // v9일 때는 초기, snake, zigzag만 무한 반복
+                if (this.currentVersion === 'v8' || this.currentVersion === 'v9') {
                     // toCreative 상태일 때는 완성된 텍스트 표시
                     if (this.animationState === 'toCreative') {
                         return 'cciD';
@@ -1327,6 +1396,7 @@ class VoronoiPattern {
                     
                     // 현재 시간 기반으로 애니메이션
                     const currentTime = Date.now() / 1000; // 초 단위
+                    const elapsed = (Date.now() - this.stateStartTime) / 1000; // 초 단위
                     
                     // 각 셀마다 완전히 고유한 해시 생성 (cellIndex를 명확하게 사용)
                     // cellIndex를 주요 요소로 사용하여 각 셀마다 확실히 다른 값 생성
@@ -1336,19 +1406,15 @@ class VoronoiPattern {
                     const speedHash = this.hash(cellIndex * 40000 + cellX * 400 + cellY * 400);
                     const phaseHash = this.hash(cellIndex * 50000 + cellX * 500 + cellY * 500);
                     
-                    // textRevealProgress에 따라 초기 애니메이션 단계 결정
-                    // 0.0 ~ 0.25: c, i, d가 번갈아가며 나타남
-                    // 0.25 ~ 0.4: 차례로 사라짐 애니메이션 (오른쪽 상단부터 반시계 방향)
-                    // 0.4 ~ 0.55: Snake animation (왼쪽 위부터 오른쪽으로, 끝나면 아래로)
-                    // 0.55 ~ 0.7: Zigzag animation (왼쪽 위부터 아래로, 끝나면 오른쪽으로 이동하고 위로)
-                    // 0.7 ~ 0.85: 'c' -> 'cc' -> 'cci' -> 'cciD'로 점진적으로 나타남
-                    // 0.85 ~ 1.0: 'cciD' 유지
-                    const revealProgress = this.textRevealProgress;
-                    
-                    if (revealProgress < 0.25) {
-                        // 초기 단계: c, i, d가 번갈아가며 나타남
+                    // 시간 기반으로 애니메이션 단계 결정
+                    if (this.currentVersion === 'v9') {
+                        // v9: 초기, snake, zigzag만 무한 반복 (15초 주기)
+                        const cycleTime = elapsed % 15; // 15초 주기로 무한 반복
                         
-                        // 각 셀마다 완전히 독립적인 가상 시간 생성
+                        if (cycleTime < 5) {
+                            // 초기 애니메이션: c, i, d가 번갈아가며 나타남
+                            
+                            // 각 셀마다 완전히 독립적인 가상 시간 생성
                         // 각 셀마다 다른 주기 (0.15초 ~ 1.5초) - 매우 넓은 범위
                         const cycleDuration = 0.15 + (Math.abs(cellHash) * 1.35);
                         
@@ -1407,350 +1473,616 @@ class VoronoiPattern {
                         
                         const letters = ['c', 'i', 'd'];
                         return letters[letterIndex];
-                    } else if (revealProgress < 0.4) {
-                        // 차례로 사라짐 애니메이션: 오른쪽 상단부터 반시계 방향으로
-                        // 0.25 ~ 0.4 구간을 0 ~ 1로 정규화
-                        const fadeProgress = (revealProgress - 0.25) / 0.15; // 0 ~ 1
-                        
-                        // 중심점 계산
-                        const centerX = this.width / 2;
-                        const centerY = this.height / 2;
-                        
-                        // 셀 위치로부터 중심점까지의 각도 계산 (라디안)
-                        const dx = cellX - centerX;
-                        const dy = cellY - centerY;
-                        let angle = Math.atan2(dy, dx);
-                        
-                        // 오른쪽 상단부터 시작하도록 각도 조정
-                        // 오른쪽 상단은 각도 -π/4 (또는 7π/4)
-                        // 반시계 방향이므로 각도가 증가하는 방향
-                        angle = angle + Math.PI / 4; // 오른쪽 상단을 0으로 조정
-                        if (angle < 0) angle += Math.PI * 2; // 0 ~ 2π 범위로 정규화
-                        
-                        // 각 셀의 순서 결정 (0 ~ 1 범위)
-                        // 반시계 방향이므로 각도가 클수록 먼저 실행
-                        const cellOrder = angle / (Math.PI * 2); // 0 ~ 1
-                        
-                        // 각 셀마다 더 긴 지연 시간 추가 (셀 간 간격을 더 넓게)
-                        const cellDelay = 0.3; // 각 셀 간 12% 지연 (더 느리게)
-                        const fadeDuration = 0.1; // 사라지고 나타나는 데 걸리는 시간 (15%)
-                        const cellStartTime = cellOrder * (1 - cellDelay * 1.5); // 시작 시간을 더 분산
-                        const cellFadeStart = cellStartTime;
-                        const cellFadeEnd = cellFadeStart + fadeDuration; // 사라지는 시간
-                        const cellAppearStart = cellFadeEnd;
-                        const cellAppearEnd = cellAppearStart + fadeDuration; // 나타나는 시간
-                        
-                        // 현재 진행도에 따라 각 셀의 상태 결정
-                        if (fadeProgress < cellFadeStart) {
-                            // 아직 시작하지 않음 - 현재 알파벳 유지 (c, i, d 중 하나)
-                            // 초기 애니메이션의 마지막 상태를 유지하기 위해 'c' 반환
-                            return 'c';
-                        } else if (fadeProgress < cellFadeEnd) {
-                            // 사라지는 중 - ' ' (빈 문자열) - 더 천천히
-                            return ' ';
-                        } else if (fadeProgress < cellAppearEnd) {
-                            // 다시 나타나는 중 - 'c' - 더 천천히
-                            return 'c';
-                        } else {
-                            // 완료 - 'c' 유지
-                            return 'c';
-                        }
-                    } else if (revealProgress < 0.55) {
-                        // Snake animation: 직사각형 나선형 패턴 (이미지 참고)
-                        // 왼쪽 위부터 시작해서 오른쪽 -> 아래 -> 왼쪽 -> 위 -> 오른쪽... 나선형으로 진행
-                        // 0.4 ~ 0.55 구간을 0 ~ 1로 정규화
-                        const snakeProgress = (revealProgress - 0.4) / 0.15; // 0 ~ 1
-                        
-                        // 모든 셀의 위치를 가져와서 순서 결정
-                        if (this.cciDGridPositions.length === 0) {
-                            this.calculateCciDGridPositions();
-                        }
-                        
-                        // 현재 셀의 위치 찾기
-                        let currentCellIndex = -1;
-                        for (let i = 0; i < this.cciDGridPositions.length; i++) {
-                            const pos = this.cciDGridPositions[i];
-                            const dist = Math.sqrt(Math.pow(pos[0] - cellX, 2) + Math.pow(pos[1] - cellY, 2));
-                            if (dist < 5) { // 5px 이내면 같은 셀
-                                currentCellIndex = i;
-                                break;
+                        } else if (cycleTime >= 5 && cycleTime < 10) {
+                            // Snake animation: 직사각형 나선형 패턴
+                            // 5초 동안 반복 (5~10초, 20~25초, 35~40초...)
+                            const snakeProgress = (cycleTime - 5) / 5; // 0 ~ 1
+                            
+                            // 모든 셀의 위치를 가져와서 순서 결정
+                            if (this.cciDGridPositions.length === 0) {
+                                this.calculateCciDGridPositions();
                             }
-                        }
-                        
-                        // 셀을 찾지 못했으면 cellIndex 사용
-                        if (currentCellIndex === -1) {
-                            currentCellIndex = cellIndex;
-                        }
-                        
-                        const allPositions = this.cciDGridPositions.length > 0 ? this.cciDGridPositions : this.points.map(p => [p[0], p[1]]);
-                        
-                        // 그리드를 행과 열로 구성
-                        const rowTolerance = 20;
-                        const colTolerance = 20;
-                        const rows = [];
-                        const grid = []; // 2D 그리드 [row][col] = cellIndex
-                        
-                        // 행 그룹화
-                        for (let i = 0; i < allPositions.length; i++) {
-                            const pos = allPositions[i];
-                            let foundRow = false;
-                            for (let j = 0; j < rows.length; j++) {
-                                if (Math.abs(rows[j][0][1] - pos[1]) < rowTolerance) {
-                                    rows[j].push([pos[0], pos[1], i]);
-                                    foundRow = true;
+                            
+                            // 현재 셀의 위치 찾기
+                            let currentCellIndex = -1;
+                            for (let i = 0; i < this.cciDGridPositions.length; i++) {
+                                const pos = this.cciDGridPositions[i];
+                                const dist = Math.sqrt(Math.pow(pos[0] - cellX, 2) + Math.pow(pos[1] - cellY, 2));
+                                if (dist < 5) { // 5px 이내면 같은 셀
+                                    currentCellIndex = i;
                                     break;
                                 }
                             }
-                            if (!foundRow) {
-                                rows.push([[pos[0], pos[1], i]]);
-                            }
-                        }
-                        
-                        // 각 행을 Y 좌표로 정렬 (위에서 아래로)
-                        rows.sort((a, b) => a[0][1] - b[0][1]);
-                        
-                        // 각 행 내에서 X 좌표로 정렬 (왼쪽에서 오른쪽으로)
-                        for (let i = 0; i < rows.length; i++) {
-                            rows[i].sort((a, b) => a[0] - b[0]);
-                        }
-                        
-                        // 2D 그리드 구성
-                        const numRows = rows.length;
-                        const numCols = Math.max(...rows.map(row => row.length));
-                        
-                        for (let rowIdx = 0; rowIdx < numRows; rowIdx++) {
-                            grid[rowIdx] = [];
-                            for (let colIdx = 0; colIdx < numCols; colIdx++) {
-                                if (colIdx < rows[rowIdx].length) {
-                                    grid[rowIdx][colIdx] = rows[rowIdx][colIdx][2]; // cellIndex
-                                } else {
-                                    grid[rowIdx][colIdx] = -1; // 빈 셀
-                                }
-                            }
-                        }
-                        
-                        // 나선형 순서 계산 (왼쪽 위부터 시계 방향으로 안쪽으로)
-                        const spiralOrder = [];
-                        let minRow = 0, maxRow = numRows - 1;
-                        let minCol = 0, maxCol = numCols - 1;
-                        
-                        while (minRow <= maxRow && minCol <= maxCol) {
-                            // 오른쪽으로 (위쪽 행)
-                            for (let col = minCol; col <= maxCol; col++) {
-                                if (grid[minRow] && grid[minRow][col] !== -1 && grid[minRow][col] !== undefined) {
-                                    spiralOrder.push(grid[minRow][col]);
-                                }
-                            }
-                            minRow++;
                             
-                            // 아래로 (오른쪽 열)
-                            for (let row = minRow; row <= maxRow; row++) {
-                                if (grid[row] && grid[row][maxCol] !== -1 && grid[row][maxCol] !== undefined) {
-                                    spiralOrder.push(grid[row][maxCol]);
-                                }
-                            }
-                            maxCol--;
-                            
-                            // 왼쪽으로 (아래쪽 행)
-                            if (minRow <= maxRow) {
-                                for (let col = maxCol; col >= minCol; col--) {
-                                    if (grid[maxRow] && grid[maxRow][col] !== -1 && grid[maxRow][col] !== undefined) {
-                                        spiralOrder.push(grid[maxRow][col]);
-                                    }
-                                }
-                                maxRow--;
+                            // 셀을 찾지 못했으면 cellIndex 사용
+                            if (currentCellIndex === -1) {
+                                currentCellIndex = cellIndex;
                             }
                             
-                            // 위로 (왼쪽 열)
-                            if (minCol <= maxCol) {
-                                for (let row = maxRow; row >= minRow; row--) {
-                                    if (grid[row] && grid[row][minCol] !== -1 && grid[row][minCol] !== undefined) {
-                                        spiralOrder.push(grid[row][minCol]);
+                            const allPositions = this.cciDGridPositions.length > 0 ? this.cciDGridPositions : this.points.map(p => [p[0], p[1]]);
+                            
+                            // 그리드를 행과 열로 구성
+                            const rowTolerance = 20;
+                            const colTolerance = 20;
+                            const rows = [];
+                            const grid = []; // 2D 그리드 [row][col] = cellIndex
+                            
+                            // 행 그룹화
+                            for (let i = 0; i < allPositions.length; i++) {
+                                const pos = allPositions[i];
+                                let foundRow = false;
+                                for (let j = 0; j < rows.length; j++) {
+                                    if (Math.abs(rows[j][0][1] - pos[1]) < rowTolerance) {
+                                        rows[j].push([pos[0], pos[1], i]);
+                                        foundRow = true;
+                                        break;
                                     }
                                 }
-                                minCol++;
-                            }
-                        }
-                        
-                        // 현재 셀의 나선형 순서 찾기
-                        let snakeOrder = spiralOrder.indexOf(currentCellIndex);
-                        if (snakeOrder === -1) {
-                            // 순서를 찾지 못했으면 cellIndex 사용
-                            snakeOrder = currentCellIndex;
-                        }
-                        
-                        // 전체 셀 수
-                        const totalCells = spiralOrder.length > 0 ? spiralOrder.length : allPositions.length;
-                        
-                        // 각 셀의 시작 시간 계산
-                        const cellDelay = 0.2; // 각 셀 간 20% 지연 (더 느리게)
-                        const fadeDuration = 0.3; // 사라지고 나타나는 데 걸리는 시간 (30%, 더 천천히)
-                        const cellStartTime = (snakeOrder / totalCells) * (1 - cellDelay * 2);
-                        const cellFadeStart = cellStartTime;
-                        const cellFadeEnd = cellFadeStart + fadeDuration;
-                        const cellAppearStart = cellFadeEnd;
-                        const cellAppearEnd = cellAppearStart + fadeDuration;
-                        
-                        // 현재 진행도에 따라 각 셀의 상태 결정
-                        if (snakeProgress < cellFadeStart) {
-                            return 'c';
-                        } else if (snakeProgress < cellFadeEnd) {
-                            return ' ';
-                        } else if (snakeProgress < cellAppearEnd) {
-                            return 'c';
-                        } else {
-                            return 'c';
-                        }
-                    } else if (revealProgress < 0.7) {
-                        // Zigzag animation: 이미지의 지그재그 패턴 (왼쪽 아래부터 시작)
-                        // 왼쪽 아래 -> 위로 -> 오른쪽 이동 -> 아래로 -> 오른쪽 이동 -> 위로...
-                        // 0.55 ~ 0.7 구간을 0 ~ 1로 정규화
-                        const zigzagProgress = (revealProgress - 0.55) / 0.15; // 0 ~ 1
-                        
-                        // 모든 셀의 위치를 가져와서 순서 결정
-                        if (this.cciDGridPositions.length === 0) {
-                            this.calculateCciDGridPositions();
-                        }
-                        
-                        // 현재 셀의 위치 찾기
-                        let currentCellIndex = -1;
-                        for (let i = 0; i < this.cciDGridPositions.length; i++) {
-                            const pos = this.cciDGridPositions[i];
-                            const dist = Math.sqrt(Math.pow(pos[0] - cellX, 2) + Math.pow(pos[1] - cellY, 2));
-                            if (dist < 5) {
-                                currentCellIndex = i;
-                                break;
-                            }
-                        }
-                        
-                        if (currentCellIndex === -1) {
-                            currentCellIndex = cellIndex;
-                        }
-                        
-                        const allPositions = this.cciDGridPositions.length > 0 ? this.cciDGridPositions : this.points.map(p => [p[0], p[1]]);
-                        
-                        // 그리드를 행과 열로 구성 (Snake와 동일한 방식)
-                        const rowTolerance = 20;
-                        const colTolerance = 20;
-                        const rows = [];
-                        const grid = []; // 2D 그리드 [row][col] = cellIndex
-                        
-                        // 행 그룹화
-                        for (let i = 0; i < allPositions.length; i++) {
-                            const pos = allPositions[i];
-                            let foundRow = false;
-                            for (let j = 0; j < rows.length; j++) {
-                                if (Math.abs(rows[j][0][1] - pos[1]) < rowTolerance) {
-                                    rows[j].push([pos[0], pos[1], i]);
-                                    foundRow = true;
-                                    break;
+                                if (!foundRow) {
+                                    rows.push([[pos[0], pos[1], i]]);
                                 }
                             }
-                            if (!foundRow) {
-                                rows.push([[pos[0], pos[1], i]]);
+                            
+                            // 각 행을 Y 좌표로 정렬 (위에서 아래로)
+                            rows.sort((a, b) => a[0][1] - b[0][1]);
+                            
+                            // 각 행 내에서 X 좌표로 정렬 (왼쪽에서 오른쪽으로)
+                            for (let i = 0; i < rows.length; i++) {
+                                rows[i].sort((a, b) => a[0] - b[0]);
                             }
-                        }
-                        
-                        // 각 행을 Y 좌표로 정렬 (위에서 아래로)
-                        rows.sort((a, b) => a[0][1] - b[0][1]);
-                        
-                        // 각 행 내에서 X 좌표로 정렬 (왼쪽에서 오른쪽으로)
-                        for (let i = 0; i < rows.length; i++) {
-                            rows[i].sort((a, b) => a[0] - b[0]);
-                        }
-                        
-                        // 2D 그리드 구성
-                        const numRows = rows.length;
-                        const numCols = Math.max(...rows.map(row => row.length));
-                        
-                        for (let rowIdx = 0; rowIdx < numRows; rowIdx++) {
-                            grid[rowIdx] = [];
-                            for (let colIdx = 0; colIdx < numCols; colIdx++) {
-                                if (colIdx < rows[rowIdx].length) {
-                                    grid[rowIdx][colIdx] = rows[rowIdx][colIdx][2]; // cellIndex
-                                } else {
-                                    grid[rowIdx][colIdx] = -1; // 빈 셀
-                                }
-                            }
-                        }
-                        
-                        // 지그재그 순서 계산 (왼쪽 아래부터 시작)
-                        // 첫 번째 열: 아래에서 위로
-                        // 두 번째 열: 위에서 아래로
-                        // 세 번째 열: 아래에서 위로
-                        // 반복...
-                        const zigzagOrder = [];
-                        
-                        for (let colIdx = 0; colIdx < numCols; colIdx++) {
-                            if (colIdx % 2 === 0) {
-                                // 짝수 열: 아래에서 위로 (마지막 행부터 첫 번째 행까지)
-                                for (let rowIdx = numRows - 1; rowIdx >= 0; rowIdx--) {
-                                    if (grid[rowIdx] && grid[rowIdx][colIdx] !== -1 && grid[rowIdx][colIdx] !== undefined) {
-                                        zigzagOrder.push(grid[rowIdx][colIdx]);
+                            
+                            // 2D 그리드 구성
+                            const numRows = rows.length;
+                            const numCols = Math.max(...rows.map(row => row.length));
+                            
+                            for (let rowIdx = 0; rowIdx < numRows; rowIdx++) {
+                                grid[rowIdx] = [];
+                                for (let colIdx = 0; colIdx < numCols; colIdx++) {
+                                    if (colIdx < rows[rowIdx].length) {
+                                        grid[rowIdx][colIdx] = rows[rowIdx][colIdx][2]; // cellIndex
+                                    } else {
+                                        grid[rowIdx][colIdx] = -1; // 빈 셀
                                     }
                                 }
+                            }
+                            
+                            // 나선형 순서 계산 (왼쪽 위부터 시계 방향으로 안쪽으로)
+                            const spiralOrder = [];
+                            let minRow = 0, maxRow = numRows - 1;
+                            let minCol = 0, maxCol = numCols - 1;
+                            
+                            while (minRow <= maxRow && minCol <= maxCol) {
+                                // 오른쪽으로 (위쪽 행)
+                                for (let col = minCol; col <= maxCol; col++) {
+                                    if (grid[minRow] && grid[minRow][col] !== -1 && grid[minRow][col] !== undefined) {
+                                        spiralOrder.push(grid[minRow][col]);
+                                    }
+                                }
+                                minRow++;
+                                
+                                // 아래로 (오른쪽 열)
+                                for (let row = minRow; row <= maxRow; row++) {
+                                    if (grid[row] && grid[row][maxCol] !== -1 && grid[row][maxCol] !== undefined) {
+                                        spiralOrder.push(grid[row][maxCol]);
+                                    }
+                                }
+                                maxCol--;
+                                
+                                // 왼쪽으로 (아래쪽 행)
+                                if (minRow <= maxRow) {
+                                    for (let col = maxCol; col >= minCol; col--) {
+                                        if (grid[maxRow] && grid[maxRow][col] !== -1 && grid[maxRow][col] !== undefined) {
+                                            spiralOrder.push(grid[maxRow][col]);
+                                        }
+                                    }
+                                    maxRow--;
+                                }
+                                
+                                // 위로 (왼쪽 열)
+                                if (minCol <= maxCol) {
+                                    for (let row = maxRow; row >= minRow; row--) {
+                                        if (grid[row] && grid[row][minCol] !== -1 && grid[row][minCol] !== undefined) {
+                                            spiralOrder.push(grid[row][minCol]);
+                                        }
+                                    }
+                                    minCol++;
+                                }
+                            }
+                            
+                            // 현재 셀의 나선형 순서 찾기
+                            let snakeOrder = spiralOrder.indexOf(currentCellIndex);
+                            if (snakeOrder === -1) {
+                                // 순서를 찾지 못했으면 cellIndex 사용
+                                snakeOrder = currentCellIndex;
+                            }
+                            
+                            // 전체 셀 수
+                            const totalCells = spiralOrder.length > 0 ? spiralOrder.length : allPositions.length;
+                            
+                            // 각 셀의 시작 시간 계산
+                            const cellDelay = 0.2; // 각 셀 간 20% 지연 (더 느리게)
+                            const fadeDuration = 0.3; // 사라지고 나타나는 데 걸리는 시간 (30%, 더 천천히)
+                            const cellStartTime = (snakeOrder / totalCells) * (1 - cellDelay * 2);
+                            const cellFadeStart = cellStartTime;
+                            const cellFadeEnd = cellFadeStart + fadeDuration;
+                            const cellAppearStart = cellFadeEnd;
+                            const cellAppearEnd = cellAppearStart + fadeDuration;
+                            
+                            // 현재 진행도에 따라 각 셀의 상태 결정
+                            if (snakeProgress < cellFadeStart) {
+                                return 'c';
+                            } else if (snakeProgress < cellFadeEnd) {
+                                return ' ';
+                            } else if (snakeProgress < cellAppearEnd) {
+                                return 'c';
                             } else {
-                                // 홀수 열: 위에서 아래로 (첫 번째 행부터 마지막 행까지)
-                                for (let rowIdx = 0; rowIdx < numRows; rowIdx++) {
-                                    if (grid[rowIdx] && grid[rowIdx][colIdx] !== -1 && grid[rowIdx][colIdx] !== undefined) {
-                                        zigzagOrder.push(grid[rowIdx][colIdx]);
+                                return 'c';
+                            }
+                        } else {
+                            // Zigzag animation: 이미지의 지그재그 패턴 (왼쪽 아래부터 시작)
+                            // 왼쪽 아래 -> 위로 -> 오른쪽 이동 -> 아래로 -> 오른쪽 이동 -> 위로...
+                            // 5초 동안 반복 (10~15초, 25~30초, 40~45초...)
+                            const zigzagProgress = (cycleTime - 10) / 5; // 0 ~ 1
+                            
+                            // 모든 셀의 위치를 가져와서 순서 결정
+                            if (this.cciDGridPositions.length === 0) {
+                                this.calculateCciDGridPositions();
+                            }
+                            
+                            // 현재 셀의 위치 찾기
+                            let currentCellIndex = -1;
+                            for (let i = 0; i < this.cciDGridPositions.length; i++) {
+                                const pos = this.cciDGridPositions[i];
+                                const dist = Math.sqrt(Math.pow(pos[0] - cellX, 2) + Math.pow(pos[1] - cellY, 2));
+                                if (dist < 5) {
+                                    currentCellIndex = i;
+                                    break;
+                                }
+                            }
+                            
+                            if (currentCellIndex === -1) {
+                                currentCellIndex = cellIndex;
+                            }
+                            
+                            const allPositions = this.cciDGridPositions.length > 0 ? this.cciDGridPositions : this.points.map(p => [p[0], p[1]]);
+                            
+                            // 그리드를 행과 열로 구성 (Snake와 동일한 방식)
+                            const rowTolerance = 20;
+                            const colTolerance = 20;
+                            const rows = [];
+                            const grid = []; // 2D 그리드 [row][col] = cellIndex
+                            
+                            // 행 그룹화
+                            for (let i = 0; i < allPositions.length; i++) {
+                                const pos = allPositions[i];
+                                let foundRow = false;
+                                for (let j = 0; j < rows.length; j++) {
+                                    if (Math.abs(rows[j][0][1] - pos[1]) < rowTolerance) {
+                                        rows[j].push([pos[0], pos[1], i]);
+                                        foundRow = true;
+                                        break;
+                                    }
+                                }
+                                if (!foundRow) {
+                                    rows.push([[pos[0], pos[1], i]]);
+                                }
+                            }
+                            
+                            // 각 행을 Y 좌표로 정렬 (위에서 아래로)
+                            rows.sort((a, b) => a[0][1] - b[0][1]);
+                            
+                            // 각 행 내에서 X 좌표로 정렬 (왼쪽에서 오른쪽으로)
+                            for (let i = 0; i < rows.length; i++) {
+                                rows[i].sort((a, b) => a[0] - b[0]);
+                            }
+                            
+                            // 2D 그리드 구성
+                            const numRows = rows.length;
+                            const numCols = Math.max(...rows.map(row => row.length));
+                            
+                            for (let rowIdx = 0; rowIdx < numRows; rowIdx++) {
+                                grid[rowIdx] = [];
+                                for (let colIdx = 0; colIdx < numCols; colIdx++) {
+                                    if (colIdx < rows[rowIdx].length) {
+                                        grid[rowIdx][colIdx] = rows[rowIdx][colIdx][2]; // cellIndex
+                                    } else {
+                                        grid[rowIdx][colIdx] = -1; // 빈 셀
                                     }
                                 }
                             }
+                            
+                            // 지그재그 순서 계산 (왼쪽 아래부터 시작)
+                            // 첫 번째 열: 아래에서 위로
+                            // 두 번째 열: 위에서 아래로
+                            // 세 번째 열: 아래에서 위로
+                            // 반복...
+                            const zigzagOrder = [];
+                            
+                            for (let colIdx = 0; colIdx < numCols; colIdx++) {
+                                if (colIdx % 2 === 0) {
+                                    // 짝수 열: 아래에서 위로 (마지막 행부터 첫 번째 행까지)
+                                    for (let rowIdx = numRows - 1; rowIdx >= 0; rowIdx--) {
+                                        if (grid[rowIdx] && grid[rowIdx][colIdx] !== -1 && grid[rowIdx][colIdx] !== undefined) {
+                                            zigzagOrder.push(grid[rowIdx][colIdx]);
+                                        }
+                                    }
+                                } else {
+                                    // 홀수 열: 위에서 아래로 (첫 번째 행부터 마지막 행까지)
+                                    for (let rowIdx = 0; rowIdx < numRows; rowIdx++) {
+                                        if (grid[rowIdx] && grid[rowIdx][colIdx] !== -1 && grid[rowIdx][colIdx] !== undefined) {
+                                            zigzagOrder.push(grid[rowIdx][colIdx]);
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // 현재 셀의 지그재그 순서 찾기
+                            let zigzagOrderIndex = zigzagOrder.indexOf(currentCellIndex);
+                            if (zigzagOrderIndex === -1) {
+                                // 순서를 찾지 못했으면 cellIndex 사용
+                                zigzagOrderIndex = currentCellIndex;
+                            }
+                            
+                            // 전체 셀 수
+                            const totalCells = zigzagOrder.length > 0 ? zigzagOrder.length : allPositions.length;
+                            
+                            // 각 셀의 시작 시간 계산
+                            const cellDelay = 0.2; // 각 셀 간 20% 지연 (더 느리게)
+                            const fadeDuration = 0.3; // 사라지고 나타나는 데 걸리는 시간 (30%, 더 천천히)
+                            const cellStartTime = (zigzagOrderIndex / totalCells) * (1 - cellDelay * 2);
+                            const cellFadeStart = cellStartTime;
+                            const cellFadeEnd = cellFadeStart + fadeDuration;
+                            const cellAppearStart = cellFadeEnd;
+                            const cellAppearEnd = cellAppearStart + fadeDuration;
+                            
+                            if (zigzagProgress < cellFadeStart) {
+                                return 'c';
+                            } else if (zigzagProgress < cellFadeEnd) {
+                                return ' ';
+                            } else if (zigzagProgress < cellAppearEnd) {
+                                return 'c';
+                            } else {
+                                return 'c';
+                            }
                         }
+                    } else if (this.currentVersion === 'v8') {
+                        // v8: 초기, snake, zigzag만 무한 반복 (15초 주기)
+                        const cycleTime = elapsed % 15; // 15초 주기로 무한 반복
                         
-                        // 현재 셀의 지그재그 순서 찾기
-                        let zigzagOrderIndex = zigzagOrder.indexOf(currentCellIndex);
-                        if (zigzagOrderIndex === -1) {
-                            // 순서를 찾지 못했으면 cellIndex 사용
-                            zigzagOrderIndex = currentCellIndex;
-                        }
-                        
-                        // 전체 셀 수
-                        const totalCells = zigzagOrder.length > 0 ? zigzagOrder.length : allPositions.length;
-                        
-                        // 각 셀의 시작 시간 계산
-                        const cellDelay = 0.2; // 각 셀 간 20% 지연 (더 느리게)
-                        const fadeDuration = 0.3; // 사라지고 나타나는 데 걸리는 시간 (30%, 더 천천히)
-                        const cellStartTime = (zigzagOrderIndex / totalCells) * (1 - cellDelay * 2);
-                        const cellFadeStart = cellStartTime;
-                        const cellFadeEnd = cellFadeStart + fadeDuration;
-                        const cellAppearStart = cellFadeEnd;
-                        const cellAppearEnd = cellAppearStart + fadeDuration;
-                        
-                        if (zigzagProgress < cellFadeStart) {
-                            return 'c';
-                        } else if (zigzagProgress < cellFadeEnd) {
-                            return ' ';
-                        } else if (zigzagProgress < cellAppearEnd) {
-                            return 'c';
+                        if (cycleTime < 5) {
+                            // 초기 애니메이션: c, i, d가 번갈아가며 나타남
+                            
+                            // 각 셀마다 완전히 독립적인 가상 시간 생성
+                            // 각 셀마다 다른 주기 (0.15초 ~ 1.5초) - 매우 넓은 범위
+                            const cycleDuration = 0.15 + (Math.abs(cellHash) * 1.35);
+                            
+                            // 각 셀마다 완전히 다른 시작 오프셋 (최대 10초)
+                            // cellIndex를 사용하여 각 셀마다 완전히 다른 시작 시간 보장
+                            const timeOffset = (Math.abs(timingHash) * 10.0) + (cellIndex * 0.1);
+                            
+                            // 각 셀마다 다른 속도 배율 (0.3배 ~ 3.0배) - 매우 넓은 범위
+                            const speedMultiplier = 0.3 + (Math.abs(speedHash) * 2.7);
+                            
+                            // 각 셀마다 다른 위상 오프셋 (0 ~ 2π)
+                            const phaseOffset = (Math.abs(phaseHash) * Math.PI * 2);
+                            
+                            // 각 셀마다 완전히 독립적인 가상 시간 계산
+                            // sin 함수를 사용하여 각 셀마다 다른 패턴 생성
+                            const virtualTime = ((currentTime - timeOffset) * speedMultiplier) + phaseOffset;
+                            const sinValue = Math.sin(virtualTime * 2); // -1 ~ 1 범위
+                            
+                            // 각 셀마다 다른 패턴 타입 (6가지)
+                            const patternType = Math.floor(Math.abs(patternHash) * 10000) % 6;
+                            
+                            // 각 셀마다 다른 시작 알파벳 인덱스 (0, 1, 2 중 하나)
+                            // cellIndex를 사용하여 각 셀마다 확실히 다른 시작 알파벳 보장
+                            const startLetterIndex = (Math.floor(Math.abs(cellHash) * 10000) + cellIndex) % 3;
+                            
+                            // sin 값과 패턴을 조합하여 각 셀마다 다른 알파벳 결정
+                            // sinValue를 0~2 범위로 정규화
+                            const normalizedSin = ((sinValue + 1) / 2) * 3; // 0 ~ 3 범위
+                            const cycleStep = Math.floor(normalizedSin) % 3; // 0, 1, 2 중 하나
+                            
+                            // 각 셀마다 다른 패턴 순서 적용
+                            let letterIndex;
+                            switch (patternType) {
+                                case 0: // c -> i -> d -> c -> ...
+                                    letterIndex = (startLetterIndex + cycleStep) % 3;
+                                    break;
+                                case 1: // i -> d -> c -> i -> ...
+                                    letterIndex = (startLetterIndex + cycleStep + 1) % 3;
+                                    break;
+                                case 2: // d -> c -> i -> d -> ...
+                                    letterIndex = (startLetterIndex + cycleStep + 2) % 3;
+                                    break;
+                                case 3: // c -> d -> i -> c -> ...
+                                    const order = [0, 2, 1]; // c, d, i 순서
+                                    letterIndex = order[(startLetterIndex + cycleStep) % 3];
+                                    break;
+                                case 4: // i -> c -> d -> i -> ...
+                                    const order2 = [1, 0, 2]; // i, c, d 순서
+                                    letterIndex = order2[(startLetterIndex + cycleStep) % 3];
+                                    break;
+                                case 5: // d -> i -> c -> d -> ...
+                                    const order3 = [2, 1, 0]; // d, i, c 순서
+                                    letterIndex = order3[(startLetterIndex + cycleStep) % 3];
+                                    break;
+                            }
+                            
+                            const letters = ['c', 'i', 'd'];
+                            return letters[letterIndex];
+                        } else if (cycleTime >= 5 && cycleTime < 10) {
+                            // Snake animation: 직사각형 나선형 패턴
+                            // 5초 동안 반복 (5~10초, 20~25초, 35~40초...)
+                            const snakeProgress = (cycleTime - 5) / 5; // 0 ~ 1
+                            
+                            // 모든 셀의 위치를 가져와서 순서 결정
+                            if (this.cciDGridPositions.length === 0) {
+                                this.calculateCciDGridPositions();
+                            }
+                            
+                            // 현재 셀의 위치 찾기
+                            let currentCellIndex = -1;
+                            for (let i = 0; i < this.cciDGridPositions.length; i++) {
+                                const pos = this.cciDGridPositions[i];
+                                const dist = Math.sqrt(Math.pow(pos[0] - cellX, 2) + Math.pow(pos[1] - cellY, 2));
+                                if (dist < 5) { // 5px 이내면 같은 셀
+                                    currentCellIndex = i;
+                                    break;
+                                }
+                            }
+                            
+                            // 셀을 찾지 못했으면 cellIndex 사용
+                            if (currentCellIndex === -1) {
+                                currentCellIndex = cellIndex;
+                            }
+                            
+                            const allPositions = this.cciDGridPositions.length > 0 ? this.cciDGridPositions : this.points.map(p => [p[0], p[1]]);
+                            
+                            // 그리드를 행과 열로 구성
+                            const rowTolerance = 20;
+                            const colTolerance = 20;
+                            const rows = [];
+                            const grid = []; // 2D 그리드 [row][col] = cellIndex
+                            
+                            // 행 그룹화
+                            for (let i = 0; i < allPositions.length; i++) {
+                                const pos = allPositions[i];
+                                let foundRow = false;
+                                for (let j = 0; j < rows.length; j++) {
+                                    if (Math.abs(rows[j][0][1] - pos[1]) < rowTolerance) {
+                                        rows[j].push([pos[0], pos[1], i]);
+                                        foundRow = true;
+                                        break;
+                                    }
+                                }
+                                if (!foundRow) {
+                                    rows.push([[pos[0], pos[1], i]]);
+                                }
+                            }
+                            
+                            // 각 행을 Y 좌표로 정렬 (위에서 아래로)
+                            rows.sort((a, b) => a[0][1] - b[0][1]);
+                            
+                            // 각 행 내에서 X 좌표로 정렬 (왼쪽에서 오른쪽으로)
+                            for (let i = 0; i < rows.length; i++) {
+                                rows[i].sort((a, b) => a[0] - b[0]);
+                            }
+                            
+                            // 2D 그리드 구성
+                            const numRows = rows.length;
+                            const numCols = Math.max(...rows.map(row => row.length));
+                            
+                            for (let rowIdx = 0; rowIdx < numRows; rowIdx++) {
+                                grid[rowIdx] = [];
+                                for (let colIdx = 0; colIdx < numCols; colIdx++) {
+                                    if (colIdx < rows[rowIdx].length) {
+                                        grid[rowIdx][colIdx] = rows[rowIdx][colIdx][2]; // cellIndex
+                                    } else {
+                                        grid[rowIdx][colIdx] = -1; // 빈 셀
+                                    }
+                                }
+                            }
+                            
+                            // 나선형 순서 계산 (왼쪽 위부터 시계 방향으로 안쪽으로)
+                            const spiralOrder = [];
+                            let minRow = 0, maxRow = numRows - 1;
+                            let minCol = 0, maxCol = numCols - 1;
+                            
+                            while (minRow <= maxRow && minCol <= maxCol) {
+                                // 오른쪽으로 (위쪽 행)
+                                for (let col = minCol; col <= maxCol; col++) {
+                                    if (grid[minRow] && grid[minRow][col] !== -1 && grid[minRow][col] !== undefined) {
+                                        spiralOrder.push(grid[minRow][col]);
+                                    }
+                                }
+                                minRow++;
+                                
+                                // 아래로 (오른쪽 열)
+                                for (let row = minRow; row <= maxRow; row++) {
+                                    if (grid[row] && grid[row][maxCol] !== -1 && grid[row][maxCol] !== undefined) {
+                                        spiralOrder.push(grid[row][maxCol]);
+                                    }
+                                }
+                                maxCol--;
+                                
+                                // 왼쪽으로 (아래쪽 행)
+                                if (minRow <= maxRow) {
+                                    for (let col = maxCol; col >= minCol; col--) {
+                                        if (grid[maxRow] && grid[maxRow][col] !== -1 && grid[maxRow][col] !== undefined) {
+                                            spiralOrder.push(grid[maxRow][col]);
+                                        }
+                                    }
+                                    maxRow--;
+                                }
+                                
+                                // 위로 (왼쪽 열)
+                                if (minCol <= maxCol) {
+                                    for (let row = maxRow; row >= minRow; row--) {
+                                        if (grid[row] && grid[row][minCol] !== -1 && grid[row][minCol] !== undefined) {
+                                            spiralOrder.push(grid[row][minCol]);
+                                        }
+                                    }
+                                    minCol++;
+                                }
+                            }
+                            
+                            // 현재 셀의 나선형 순서 찾기
+                            let snakeOrder = spiralOrder.indexOf(currentCellIndex);
+                            if (snakeOrder === -1) {
+                                // 순서를 찾지 못했으면 cellIndex 사용
+                                snakeOrder = currentCellIndex;
+                            }
+                            
+                            // 전체 셀 수
+                            const totalCells = spiralOrder.length > 0 ? spiralOrder.length : allPositions.length;
+                            
+                            // 각 셀의 시작 시간 계산
+                            const cellDelay = 0.2; // 각 셀 간 20% 지연 (더 느리게)
+                            const fadeDuration = 0.3; // 사라지고 나타나는 데 걸리는 시간 (30%, 더 천천히)
+                            const cellStartTime = (snakeOrder / totalCells) * (1 - cellDelay * 2);
+                            const cellFadeStart = cellStartTime;
+                            const cellFadeEnd = cellFadeStart + fadeDuration;
+                            const cellAppearStart = cellFadeEnd;
+                            const cellAppearEnd = cellAppearStart + fadeDuration;
+                            
+                            // 현재 진행도에 따라 각 셀의 상태 결정
+                            if (snakeProgress < cellFadeStart) {
+                                return 'c';
+                            } else if (snakeProgress < cellFadeEnd) {
+                                return ' ';
+                            } else if (snakeProgress < cellAppearEnd) {
+                                return 'c';
+                            } else {
+                                return 'c';
+                            }
                         } else {
-                            return 'c';
+                            // Zigzag animation: 이미지의 지그재그 패턴 (왼쪽 아래부터 시작)
+                            // 왼쪽 아래 -> 위로 -> 오른쪽 이동 -> 아래로 -> 오른쪽 이동 -> 위로...
+                            // 5초 동안 반복 (10~15초, 25~30초, 40~45초...)
+                            const zigzagProgress = (cycleTime - 10) / 5; // 0 ~ 1
+                            
+                            // 모든 셀의 위치를 가져와서 순서 결정
+                            if (this.cciDGridPositions.length === 0) {
+                                this.calculateCciDGridPositions();
+                            }
+                            
+                            // 현재 셀의 위치 찾기
+                            let currentCellIndex = -1;
+                            for (let i = 0; i < this.cciDGridPositions.length; i++) {
+                                const pos = this.cciDGridPositions[i];
+                                const dist = Math.sqrt(Math.pow(pos[0] - cellX, 2) + Math.pow(pos[1] - cellY, 2));
+                                if (dist < 5) {
+                                    currentCellIndex = i;
+                                    break;
+                                }
+                            }
+                            
+                            if (currentCellIndex === -1) {
+                                currentCellIndex = cellIndex;
+                            }
+                            
+                            const allPositions = this.cciDGridPositions.length > 0 ? this.cciDGridPositions : this.points.map(p => [p[0], p[1]]);
+                            
+                            // 그리드를 행과 열로 구성 (Snake와 동일한 방식)
+                            const rowTolerance = 20;
+                            const colTolerance = 20;
+                            const rows = [];
+                            const grid = []; // 2D 그리드 [row][col] = cellIndex
+                            
+                            // 행 그룹화
+                            for (let i = 0; i < allPositions.length; i++) {
+                                const pos = allPositions[i];
+                                let foundRow = false;
+                                for (let j = 0; j < rows.length; j++) {
+                                    if (Math.abs(rows[j][0][1] - pos[1]) < rowTolerance) {
+                                        rows[j].push([pos[0], pos[1], i]);
+                                        foundRow = true;
+                                        break;
+                                    }
+                                }
+                                if (!foundRow) {
+                                    rows.push([[pos[0], pos[1], i]]);
+                                }
+                            }
+                            
+                            // 각 행을 Y 좌표로 정렬 (위에서 아래로)
+                            rows.sort((a, b) => a[0][1] - b[0][1]);
+                            
+                            // 각 행 내에서 X 좌표로 정렬 (왼쪽에서 오른쪽으로)
+                            for (let i = 0; i < rows.length; i++) {
+                                rows[i].sort((a, b) => a[0] - b[0]);
+                            }
+                            
+                            // 2D 그리드 구성
+                            const numRows = rows.length;
+                            const numCols = Math.max(...rows.map(row => row.length));
+                            
+                            for (let rowIdx = 0; rowIdx < numRows; rowIdx++) {
+                                grid[rowIdx] = [];
+                                for (let colIdx = 0; colIdx < numCols; colIdx++) {
+                                    if (colIdx < rows[rowIdx].length) {
+                                        grid[rowIdx][colIdx] = rows[rowIdx][colIdx][2]; // cellIndex
+                                    } else {
+                                        grid[rowIdx][colIdx] = -1; // 빈 셀
+                                    }
+                                }
+                            }
+                            
+                            // 지그재그 순서 계산 (왼쪽 아래부터 시작)
+                            // 첫 번째 열: 아래에서 위로
+                            // 두 번째 열: 위에서 아래로
+                            // 세 번째 열: 아래에서 위로
+                            // 반복...
+                            const zigzagOrder = [];
+                            
+                            for (let colIdx = 0; colIdx < numCols; colIdx++) {
+                                if (colIdx % 2 === 0) {
+                                    // 짝수 열: 아래에서 위로 (마지막 행부터 첫 번째 행까지)
+                                    for (let rowIdx = numRows - 1; rowIdx >= 0; rowIdx--) {
+                                        if (grid[rowIdx] && grid[rowIdx][colIdx] !== -1 && grid[rowIdx][colIdx] !== undefined) {
+                                            zigzagOrder.push(grid[rowIdx][colIdx]);
+                                        }
+                                    }
+                                } else {
+                                    // 홀수 열: 위에서 아래로 (첫 번째 행부터 마지막 행까지)
+                                    for (let rowIdx = 0; rowIdx < numRows; rowIdx++) {
+                                        if (grid[rowIdx] && grid[rowIdx][colIdx] !== -1 && grid[rowIdx][colIdx] !== undefined) {
+                                            zigzagOrder.push(grid[rowIdx][colIdx]);
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // 현재 셀의 지그재그 순서 찾기
+                            let zigzagOrderIndex = zigzagOrder.indexOf(currentCellIndex);
+                            if (zigzagOrderIndex === -1) {
+                                // 순서를 찾지 못했으면 cellIndex 사용
+                                zigzagOrderIndex = currentCellIndex;
+                            }
+                            
+                            // 전체 셀 수
+                            const totalCells = zigzagOrder.length > 0 ? zigzagOrder.length : allPositions.length;
+                            
+                            // 각 셀의 시작 시간 계산
+                            const cellDelay = 0.2; // 각 셀 간 20% 지연 (더 느리게)
+                            const fadeDuration = 0.3; // 사라지고 나타나는 데 걸리는 시간 (30%, 더 천천히)
+                            const cellStartTime = (zigzagOrderIndex / totalCells) * (1 - cellDelay * 2);
+                            const cellFadeStart = cellStartTime;
+                            const cellFadeEnd = cellFadeStart + fadeDuration;
+                            const cellAppearStart = cellFadeEnd;
+                            const cellAppearEnd = cellAppearStart + fadeDuration;
+                            
+                            if (zigzagProgress < cellFadeStart) {
+                                return 'c';
+                            } else if (zigzagProgress < cellFadeEnd) {
+                                return ' ';
+                            } else if (zigzagProgress < cellAppearEnd) {
+                                return 'c';
+                            } else {
+                                return 'c';
+                            }
                         }
-                    } else if (revealProgress < 0.85) {
-                        // 전환 단계: 'c' -> 'cc' -> 'cci' -> 'cciD'로 점진적으로 나타남
-                        // 0.7 ~ 0.85 구간을 0 ~ 1로 정규화
-                        const transitionProgress = (revealProgress - 0.7) / 0.15; // 0 ~ 1
-                        
-                        // 모든 셀이 동일한 속도로 'c' -> 'cc' -> 'cci' -> 'cciD'로 전환
-                        // ease-in-out으로 부드러운 전환
-                        const easedProgress = transitionProgress < 0.5 
-                            ? 2 * transitionProgress * transitionProgress 
-                            : -1 + (4 - 2 * transitionProgress) * transitionProgress;
-                        
-                        // 'c' -> 'cc' -> 'cci' -> 'cciD'로 점진적으로 전환
-                        if (easedProgress < 0.25) {
-                            return 'c';
-                        } else if (easedProgress < 0.5) {
-                            return 'cc';
-                        } else if (easedProgress < 0.75) {
-                            return 'cci';
-                        } else {
-                            return 'cciD';
-                        }
-                    } else {
-                        // 완성 단계: 'cciD' 유지
-                        return 'cciD';
                     }
                 }
                 
@@ -2165,17 +2497,17 @@ class VoronoiPattern {
         const currentTime = Date.now();
         const elapsed = currentTime - this.stateStartTime;
         // gridDynamic 모드일 때는 별도의 duration 사용
-        // v8일 때 cciDGrid 상태는 더 긴 duration 사용 (6초)
+        // v8, v9일 때는 무한 반복을 위해 매우 큰 duration 설정
         let duration = this.stateDuration;
         if (this.animationState === 'gridDynamic') {
             duration = this.gridDynamicDuration;
-        } else if (this.animationState === 'cciDGrid' && this.currentVersion === 'v8') {
-            duration = 6000; // v8일 때 6초
+        } else if (this.animationState === 'cciDGrid' && (this.currentVersion === 'v8' || this.currentVersion === 'v9')) {
+            duration = 999999999; // v8, v9일 때 무한 반복을 위한 매우 큰 값
         }
         const progress = Math.min(1, elapsed / duration);
         
-        // 상태 전환 체크
-        if (progress >= 1) {
+        // 상태 전환 체크 (v8, v9는 상태 전환하지 않음)
+        if (progress >= 1 && this.currentVersion !== 'v8' && this.currentVersion !== 'v9') {
             this.transitionToNextState();
             return;
         }

@@ -6,6 +6,16 @@ let v3Sketch = function(p) {
     let OverlayCanvas;
     let PARAMS;
     
+    // hex 색상을 RGB로 변환하는 함수
+    function hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : { r: 0, g: 0, b: 0 };
+    }
+    
     // Shader와 동일한 hash 함수 (JavaScript 버전)
     // shader: fract(sin(dot(uv, vec2(1234.5678, 567.8901)))*12345.67)
     function hash1(uv) {
@@ -289,6 +299,7 @@ let v3Sketch = function(p) {
             Smin: 1.0, // 고정값: 1.0
             DotSize: 6.0,
             TextSize: 24,
+            TextColor: '#000000', // 텍스트 색상 (hex 형식)
         };
         
         // 전역 변수에 저장
@@ -376,7 +387,10 @@ let v3Sketch = function(p) {
             return;
         }
         
-        OverlayCanvas.fill(0); // #000 color
+        // TextColor 사용 (hex 형식에서 RGB로 변환)
+        const textColorHex = PARAMS.TextColor || '#000000';
+        const textColorRgb = hexToRgb(textColorHex);
+        OverlayCanvas.fill(textColorRgb.r, textColorRgb.g, textColorRgb.b);
         OverlayCanvas.noStroke();
         OverlayCanvas.textAlign(p.CENTER, p.CENTER); // 중앙 정렬
         
@@ -390,7 +404,7 @@ let v3Sketch = function(p) {
         // 각 cell의 중심점에 텍스트 그리기
         for (let i = 0; i < cellsArray.length; i++) {
             const cell = cellsArray[i];
-            OverlayCanvas.fill(0);
+            OverlayCanvas.fill(textColorRgb.r, textColorRgb.g, textColorRgb.b);
             OverlayCanvas.textSize(textSize);
             // Point의 정확한 위치에 텍스트 배치
             OverlayCanvas.text(text, cell.centerX, cell.centerY);
@@ -459,6 +473,7 @@ function setupV3Controls() {
             Smin: 1.0,
             DotSize: 6.0,
             TextSize: 24,
+            TextColor: '#000000', // 텍스트 색상 (hex 형식)
         };
     } else {
         // DotSize와 TextSize가 없으면 추가
@@ -467,6 +482,9 @@ function setupV3Controls() {
         }
         if (typeof v3PARAMS.TextSize === 'undefined') {
             v3PARAMS.TextSize = 24;
+        }
+        if (typeof v3PARAMS.TextColor === 'undefined') {
+            v3PARAMS.TextColor = '#000000';
         }
     }
     

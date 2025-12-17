@@ -247,6 +247,7 @@ let v5Sketch = function(p) {
             Smin: 1.0,
             DotSize: 6.0,
             TextSize: 24,
+            TextColor: '#000000', // 텍스트 색상 (hex 형식)
         };
         
         // 전역 변수에 저장
@@ -431,7 +432,10 @@ let v5Sketch = function(p) {
             
             // Text 그리기 (Point 위치를 따라 - 오른쪽에 배치)
             if (PARAMS.Point) {
-                OverlayCanvas.fill(0);
+                // TextColor 사용 (hex 형식에서 RGB로 변환)
+                const textColorHex = PARAMS.TextColor || '#000000';
+                const textColorRgb = hexToRgb(textColorHex);
+                OverlayCanvas.fill(textColorRgb.r, textColorRgb.g, textColorRgb.b);
                 OverlayCanvas.textAlign(p.LEFT, p.CENTER); // 왼쪽 정렬로 변경
                 OverlayCanvas.textSize(PARAMS.TextSize);
                 
@@ -493,6 +497,7 @@ function setupV5Controls() {
             Smin: 1.0,
             DotSize: 6.0,
             TextSize: 24,
+            TextColor: '#000000', // 텍스트 색상 (hex 형식)
         };
     } else {
         if (typeof v5PARAMS.DotSize === 'undefined') {
@@ -500,6 +505,9 @@ function setupV5Controls() {
         }
         if (typeof v5PARAMS.TextSize === 'undefined') {
             v5PARAMS.TextSize = 24;
+        }
+        if (typeof v5PARAMS.TextColor === 'undefined') {
+            v5PARAMS.TextColor = '#000000';
         }
     }
     

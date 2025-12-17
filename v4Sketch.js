@@ -12,6 +12,16 @@ let v4Sketch = function(p) {
     // 4가지 letter: c, c, i, d
     const LETTERS = ['c', 'c', 'i', 'd'];
     
+    // hex 색상을 RGB로 변환하는 함수
+    function hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : { r: 0, g: 0, b: 0 };
+    }
+    
     // emoji인지 확인하는 함수
     function isEmoji(char) {
         // emoji 유니코드 범위 체크
@@ -234,6 +244,7 @@ let v4Sketch = function(p) {
             Color1: { r: 246/255, g: 255/255, b: 67/255 },   // #F6FF43 - 노란색
             Color2: { r: 78/255, g: 255/255, b: 102/255 },   // #4EFF66 - 초록색
             Color3: { r: 51/255, g: 255/255, b: 236/255 },  // #33FFEC - 청록색
+            TextColor: '#000000', // 텍스트 색상 (hex 형식)
             Recording: false // 녹화 상태
         };
         
@@ -308,7 +319,10 @@ let v4Sketch = function(p) {
                         const letterIndex = Math.floor(closestCell.hash * 4) % 4;
                         const letter = LETTERS[letterIndex];
                         
-                        Canvas.fill(0);
+                        // TextColor 사용 (hex 형식에서 RGB로 변환)
+                        const textColorHex = PARAMS.TextColor || '#000000';
+                        const textColorRgb = hexToRgb(textColorHex);
+                        Canvas.fill(textColorRgb.r, textColorRgb.g, textColorRgb.b);
                         Canvas.textAlign(p.CENTER, p.CENTER);
                         Canvas.textSize(12);
                         // emoji가 아니면 커스텀 폰트 사용
@@ -443,7 +457,8 @@ function setupV4Controls() {
             Color0: { r: 167/255, g: 111/255, b: 255/255 },
             Color1: { r: 246/255, g: 255/255, b: 67/255 },
             Color2: { r: 78/255, g: 255/255, b: 102/255 },
-            Color3: { r: 51/255, g: 255/255, b: 236/255 }
+            Color3: { r: 51/255, g: 255/255, b: 236/255 },
+            TextColor: '#000000' // 텍스트 색상 (hex 형식)
         };
     }
     
